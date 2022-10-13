@@ -1,5 +1,7 @@
 # Full-text Search Engine
 
+[![Build](https://github.com/micpst/full-text-search-engine/actions/workflows/build.yml/badge.svg)](https://github.com/micpst/full-text-search-engine/actions/workflows/build.yml)
+
 Restful, in-memory, full-text search engine written in Go.
 
 ## 📄 License
