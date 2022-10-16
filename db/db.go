@@ -1,6 +1,8 @@
 package db
 
 import (
+	"fmt"
+
 	"github.com/cornelk/hashmap"
 	"github.com/gofrs/uuid"
 	"github.com/micpst/full-text-search-engine/parser"
@@ -32,11 +34,19 @@ func AddDocument(data string) *Document {
 	return &Document{id, data}
 }
 
-func UpdateDocument(d *Document) error {
-	return nil
+func ModifyDocument(id string, data string) (*Document, error) {
+	if _, ok := documents.Get(id); !ok {
+		return nil, fmt.Errorf("document not found")
+	}
+	documents.Set(id, data)
+	return &Document{id, data}, nil
 }
 
-func DeleteDocument(id string) error {
+func RemoveDocument(id string) error {
+	if _, ok := documents.Get(id); !ok {
+		return fmt.Errorf("document not found")
+	}
+	documents.Del(id)
 	return nil
 }
 
