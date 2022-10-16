@@ -53,10 +53,14 @@ func DeleteDocument(c *gin.Context) {
 		c.Status(http.StatusNotFound)
 		return
 	}
-
 	c.Status(http.StatusOK)
 }
 
 func SearchDocument(c *gin.Context) {
-
+	var params SearchParams
+	if err := c.Bind(&params); err != nil {
+		return
+	}
+	documents := db.SearchDocuments(params.Query)
+	c.JSON(http.StatusOK, documents)
 }

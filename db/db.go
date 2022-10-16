@@ -66,6 +66,30 @@ func RemoveDocument(id string) error {
 	return nil
 }
 
+func SearchDocuments(query string) []Document {
+	resultInfos := []DocumentInfo{}
+	resultDocs := []Document{}
+	tokens := parser.Tokenize(query)
+
+	for _, token := range tokens {
+		docsInfo, _ := index.Get(token)
+		for _, info := range docsInfo {
+			if idx := getDocumentInfoIndex(resultInfos, info.DocumentId); idx >= 0 {
+				resultInfos[idx].Frequency += info.Frequency
+			} else {
+				resultInfos = append(resultInfos, info)
+			}
+		}
+	}
+
+	for _, info := range resultInfos {
+		content, _ := documents.Get(info.DocumentId)
+		resultDocs = append(resultDocs, Document{info.DocumentId, content})
+	}
+
+	return resultDocs
+}
+
 func indexDocument(d *Document) {
 	tokens := parser.Tokenize(d.Content)
 	tokensCount := parser.Count(tokens)
@@ -91,4 +115,13 @@ func deindexDocument(d *Document) {
 			index.Set(token, newDocsInfo)
 		}
 	}
+}
+
+func getDocumentInfoIndex(docsInfos []DocumentInfo, documentId string) int {
+	for idx, info := range docsInfos {
+		if info.DocumentId == documentId {
+			return idx
+		}
+	}
+	return -1
 }
