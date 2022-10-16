@@ -28,29 +28,45 @@ func init() {
 	index = hashmap.New[string, []DocumentInfo]()
 }
 
-func AddDocument(data string) *Document {
+func AddDocument(content string) (*Document, error) {
 	id := uuid.Must(uuid.NewV4()).String()
-	documents.Insert(id, data)
-	return &Document{id, data}
+	newDoc := Document{id, content}
+
+	if ok := documents.Insert(newDoc.Id, newDoc.Content); !ok {
+		return nil, fmt.Errorf("document cannot be created")
+	}
+	indexDocument(&newDoc)
+
+	return &newDoc, nil
 }
 
-func ModifyDocument(id string, data string) (*Document, error) {
-	if _, ok := documents.Get(id); !ok {
+func ModifyDocument(id string, newContent string) (*Document, error) {
+	newDoc := Document{id, newContent}
+	content, ok := documents.Get(id)
+	if !ok {
 		return nil, fmt.Errorf("document not found")
 	}
-	documents.Set(id, data)
-	return &Document{id, data}, nil
+
+	deindexDocument(&Document{id, content})
+	documents.Set(newDoc.Id, newDoc.Content)
+	indexDocument(&newDoc)
+
+	return &newDoc, nil
 }
 
 func RemoveDocument(id string) error {
-	if _, ok := documents.Get(id); !ok {
+	content, ok := documents.Get(id)
+	if !ok {
 		return fmt.Errorf("document not found")
 	}
+
+	deindexDocument(&Document{id, content})
 	documents.Del(id)
+
 	return nil
 }
 
-func IndexDocument(d *Document) {
+func indexDocument(d *Document) {
 	tokens := parser.Tokenize(d.Content)
 	tokensCount := parser.Count(tokens)
 
@@ -58,5 +74,21 @@ func IndexDocument(d *Document) {
 		docsInfo, _ := index.GetOrInsert(token, []DocumentInfo{})
 		docsInfo = append(docsInfo, DocumentInfo{d.Id, count})
 		index.Set(token, docsInfo)
+	}
+}
+
+func deindexDocument(d *Document) {
+	tokens := parser.Tokenize(d.Content)
+
+	for _, token := range tokens {
+		if docsInfo, ok := index.Get(token); ok {
+			var newDocsInfo []DocumentInfo
+			for _, info := range docsInfo {
+				if info.DocumentId != d.Id {
+					newDocsInfo = append(newDocsInfo, info)
+				}
+			}
+			index.Set(token, newDocsInfo)
+		}
 	}
 }
