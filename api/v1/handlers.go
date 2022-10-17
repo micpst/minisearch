@@ -1,10 +1,10 @@
-package handlers
+package v1
 
 import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/micpst/full-text-search-engine/db"
+	"github.com/micpst/full-text-search-engine/pkg/db"
 )
 
 type DocumentBody struct {
@@ -16,7 +16,7 @@ type SearchParams struct {
 	Query string `form:"q" binding:"required"`
 }
 
-func CreateDocument(c *gin.Context) {
+func createDocument(c *gin.Context) {
 	var body DocumentBody
 	if err := c.BindJSON(&body); err != nil {
 		return
@@ -31,7 +31,7 @@ func CreateDocument(c *gin.Context) {
 	c.JSON(http.StatusCreated, DocumentBody{d.Id, d.Content})
 }
 
-func UpdateDocument(c *gin.Context) {
+func updateDocument(c *gin.Context) {
 	var body DocumentBody
 	if err := c.BindJSON(&body); err != nil {
 		return
@@ -47,7 +47,7 @@ func UpdateDocument(c *gin.Context) {
 	c.JSON(http.StatusOK, DocumentBody{d.Id, d.Content})
 }
 
-func DeleteDocument(c *gin.Context) {
+func deleteDocument(c *gin.Context) {
 	id := c.Param("id")
 	if err := db.RemoveDocument(id); err != nil {
 		c.Status(http.StatusNotFound)
@@ -56,7 +56,7 @@ func DeleteDocument(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-func SearchDocument(c *gin.Context) {
+func searchDocument(c *gin.Context) {
 	var params SearchParams
 	if err := c.Bind(&params); err != nil {
 		return

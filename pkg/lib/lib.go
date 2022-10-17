@@ -1,4 +1,4 @@
-package parser
+package lib
 
 import (
 	"regexp"

@@ -1,11 +1,10 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
+	"github.com/micpst/full-text-search-engine/api/v1"
 )
 
 func main() {
-	r := gin.Default()
-	initRoutes(r)
+	r := v1.InitRoutes()
 	r.Run()
 }

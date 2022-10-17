@@ -5,7 +5,7 @@ import (
 
 	"github.com/cornelk/hashmap"
 	"github.com/gofrs/uuid"
-	"github.com/micpst/full-text-search-engine/parser"
+	"github.com/micpst/full-text-search-engine/pkg/lib"
 )
 
 type Document struct {
@@ -69,7 +69,7 @@ func RemoveDocument(id string) error {
 func SearchDocuments(query string) []Document {
 	resultInfos := []DocumentInfo{}
 	resultDocs := []Document{}
-	tokens := parser.Tokenize(query)
+	tokens := lib.Tokenize(query)
 
 	for _, token := range tokens {
 		docsInfo, _ := index.Get(token)
@@ -91,8 +91,8 @@ func SearchDocuments(query string) []Document {
 }
 
 func indexDocument(d *Document) {
-	tokens := parser.Tokenize(d.Content)
-	tokensCount := parser.Count(tokens)
+	tokens := lib.Tokenize(d.Content)
+	tokensCount := lib.Count(tokens)
 
 	for token, count := range tokensCount {
 		docsInfo, _ := index.GetOrInsert(token, []DocumentInfo{})
@@ -102,7 +102,7 @@ func indexDocument(d *Document) {
 }
 
 func deindexDocument(d *Document) {
-	tokens := parser.Tokenize(d.Content)
+	tokens := lib.Tokenize(d.Content)
 
 	for _, token := range tokens {
 		if docsInfo, ok := index.Get(token); ok {
