@@ -6,5 +6,5 @@ import (
 
 func main() {
 	r := v1.InitRoutes()
-	r.Run()
+	_ = r.Run()
 }

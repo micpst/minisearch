@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-go@v3
         with:
           go-version: '1.19.1'
-      - run: go test
+      - run: make test
 
   build:
     name: Build binary
@@ -52,4 +52,4 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-        run: go build ./cmd/client
+        run: make build
