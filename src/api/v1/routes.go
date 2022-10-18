@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func InitRoutes() *gin.Engine {
+func InitRouter() *gin.Engine {
 	r := gin.Default()
 
 	r.GET("/api/v1/search", searchDocument)

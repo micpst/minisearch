@@ -5,7 +5,7 @@ import (
 
 	"github.com/cornelk/hashmap"
 	"github.com/gofrs/uuid"
-	"github.com/micpst/full-text-search-engine/pkg/lib"
+	"github.com/micpst/full-text-search-engine/src/lib"
 )
 
 type Document struct {

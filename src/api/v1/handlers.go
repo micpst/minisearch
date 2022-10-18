@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/micpst/full-text-search-engine/pkg/db"
+	"github.com/micpst/full-text-search-engine/src/db"
 )
 
 type DocumentBody struct {

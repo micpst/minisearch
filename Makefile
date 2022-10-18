@@ -5,19 +5,19 @@ BINARY_PATH=$(BINARY_DIR)/$(BINARY_NAME)
 all: build test
 
 install:
-	go get ./cmd/server
+	go get ./src
 
 lint:
 	golangci-lint run
 
 build:
-	go build -o $(BINARY_PATH) ./cmd/server/
+	go build -o $(BINARY_PATH) ./src
 
 test:
-	go test -v -race ./pkg/...
+	go test -v -race ./...
 
 run:
-	go build -o $(BINARY_PATH) ./cmd/server/
+	go build -o $(BINARY_PATH) ./src
 	./$(BINARY_PATH)
 
 clean:
