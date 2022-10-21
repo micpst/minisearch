@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/cornelk/hashmap"
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 	"github.com/micpst/full-text-search-engine/src/lib"
 )
 
@@ -29,7 +29,7 @@ func init() {
 }
 
 func AddDocument(content string) (*Document, error) {
-	id := uuid.Must(uuid.NewV4()).String()
+	id := uuid.NewString()
 	newDoc := Document{id, content}
 
 	if ok := documents.Insert(newDoc.Id, newDoc.Content); !ok {

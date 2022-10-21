@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/cornelk/hashmap v1.0.8
 	github.com/gin-gonic/gin v1.8.1
-	github.com/gofrs/uuid v4.3.0+incompatible
+	github.com/google/uuid v1.3.0
 )
 
 require (
