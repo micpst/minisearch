@@ -1,7 +1,7 @@
 BINARY_DIR=bin
 BINARY_NAME=server
 BINARY_PATH=$(BINARY_DIR)/$(BINARY_NAME)
-DOCKER_IMAGE=fts-engine-rest
+DOCKER_IMAGE=search-engine-rest
 DOCKER_PORT=3000
 WATCH_PORT=3001
 COVERAGE_PROFILE=cover.out
@@ -50,7 +50,7 @@ lint:
 # Docker:
 docker-build-run:
 	@docker build -t $(DOCKER_IMAGE) .
-	@docker run --rm -p $(DOCKER_PORT):$(DOCKER_PORT) $(DOCKER_IMAGE) -p $(DOCKER_PORT)
+	@docker run --rm --name $(DOCKER_IMAGE) -d -p $(DOCKER_PORT):$(DOCKER_PORT) $(DOCKER_IMAGE) -p $(DOCKER_PORT)
 
 docker-run:
-	@docker run --rm -p $(DOCKER_PORT):$(DOCKER_PORT) $(DOCKER_IMAGE) -p $(DOCKER_PORT)
+	@docker run --rm --name $(DOCKER_IMAGE) -d -p $(DOCKER_PORT):$(DOCKER_PORT) $(DOCKER_IMAGE) -p $(DOCKER_PORT)

@@ -17,8 +17,6 @@ FROM gcr.io/distroless/base-debian11
 
 COPY --from=build /app/bin/server /
 
-EXPOSE 8080
-
 USER nonroot:nonroot
 
 ENTRYPOINT ["/server"]
