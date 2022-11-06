@@ -8,13 +8,13 @@ import (
 )
 
 type App struct {
-	db     *storage.MemDB
+	db     *storage.MemDB[Document]
 	router *gin.Engine
 }
 
 func New() *App {
 	app := &App{
-		db:     storage.New(),
+		db:     storage.New[Document](),
 		router: gin.Default(),
 	}
 	app.initRoutes()

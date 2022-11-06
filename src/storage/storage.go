@@ -2,119 +2,125 @@ package storage
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/cornelk/hashmap"
 	"github.com/google/uuid"
 	"github.com/micpst/full-text-search-engine/src/lib"
 )
 
-type Document struct {
-	Id       string `json:"id"`
-	Title    string `json:"title" xml:"title" binding:"required"`
-	Url      string `json:"url" xml:"url" binding:"required"`
-	Abstract string `json:"abstract" xml:"abstract" binding:"required"`
-}
-
-type DocumentInfo struct {
+type DocInfo struct {
 	docId string
 	freq  uint32
 }
 
-type MemDB struct {
-	docs  *hashmap.Map[string, Document]
-	index *hashmap.Map[string, []DocumentInfo]
+type MemDB[Schema any] struct {
+	docs  *hashmap.Map[string, Schema]
+	index *hashmap.Map[string, []DocInfo]
 }
 
-func (d *Document) Content() string {
-	return fmt.Sprintf("%s %s", d.Title, d.Abstract)
-}
-
-func New() *MemDB {
-	return &MemDB{
-		docs:  hashmap.New[string, Document](),
-		index: hashmap.New[string, []DocumentInfo](),
+func New[Schema any]() *MemDB[Schema] {
+	return &MemDB[Schema]{
+		docs:  hashmap.New[string, Schema](),
+		index: hashmap.New[string, []DocInfo](),
 	}
 }
 
-func (db *MemDB) Create(doc Document) (*Document, error) {
-	doc.Id = uuid.NewString()
-	if ok := db.docs.Insert(doc.Id, doc); !ok {
-		return nil, fmt.Errorf("document cannot be created")
+func (db *MemDB[Schema]) Create(doc Schema) (string, error) {
+	id := uuid.NewString()
+	if ok := db.docs.Insert(id, doc); !ok {
+		return "", fmt.Errorf("document cannot be created")
 	}
 
-	db.indexDocument(&doc)
+	fields := getIndexFields(doc)
+	for _, field := range fields {
+		db.indexField(id, field)
+	}
 
-	return &doc, nil
+	return id, nil
 }
 
-func (db *MemDB) Update(id string, doc Document) (*Document, error) {
+func (db *MemDB[Schema]) Update(id string, doc Schema) error {
 	prevDoc, ok := db.docs.Get(id)
 	if !ok {
-		return nil, fmt.Errorf("document not found")
+		return fmt.Errorf("document not found")
 	}
 
-	db.deindexDocument(&prevDoc)
 	db.docs.Set(id, doc)
-	db.indexDocument(&doc)
 
-	return &doc, nil
+	fields := getIndexFields(prevDoc)
+	for _, field := range fields {
+		db.deindexField(id, field)
+	}
+
+	fields = getIndexFields(doc)
+	for _, field := range fields {
+		db.indexField(id, field)
+	}
+
+	return nil
 }
 
-func (db *MemDB) Delete(id string) error {
+func (db *MemDB[Schema]) Delete(id string) error {
 	doc, ok := db.docs.Get(id)
 	if !ok {
 		return fmt.Errorf("document not found")
 	}
 
-	db.deindexDocument(&doc)
 	db.docs.Del(id)
+
+	fields := getIndexFields(doc)
+	for _, field := range fields {
+		db.deindexField(id, field)
+	}
 
 	return nil
 }
 
-func (db *MemDB) Search(query string) []Document {
-	resultInfos := []DocumentInfo{}
-	resultDocs := []Document{}
+func (db *MemDB[Schema]) Search(query string) []Schema {
+	docs := []Schema{}
+	infos := []DocInfo{}
 	tokens := lib.Tokenize(query)
 
 	for _, token := range tokens {
 		docsInfo, _ := db.index.Get(token)
+
 		for _, info := range docsInfo {
-			if idx := getDocumentInfoIndex(resultInfos, info.docId); idx >= 0 {
-				resultInfos[idx].freq += info.freq
+			if idx := getDocumentInfoIndex(infos, info.docId); idx >= 0 {
+				infos[idx].freq += info.freq
 			} else {
-				resultInfos = append(resultInfos, info)
+				infos = append(infos, info)
 			}
 		}
 	}
 
-	for _, info := range resultInfos {
+	for _, info := range infos {
 		doc, _ := db.docs.Get(info.docId)
-		resultDocs = append(resultDocs, doc)
+		docs = append(docs, doc)
 	}
 
-	return resultDocs
+	return docs
 }
 
-func (db *MemDB) indexDocument(d *Document) {
-	tokens := lib.Tokenize(d.Content())
+func (db *MemDB[Schema]) indexField(id string, text string) {
+	tokens := lib.Tokenize(text)
 	tokensCount := lib.Count(tokens)
 
 	for token, count := range tokensCount {
-		docsInfo, _ := db.index.GetOrInsert(token, []DocumentInfo{})
-		docsInfo = append(docsInfo, DocumentInfo{d.Id, count})
+		docsInfo, _ := db.index.GetOrInsert(token, []DocInfo{})
+		docsInfo = append(docsInfo, DocInfo{id, count})
 		db.index.Set(token, docsInfo)
 	}
 }
 
-func (db *MemDB) deindexDocument(d *Document) {
-	tokens := lib.Tokenize(d.Content())
+func (db *MemDB[Schema]) deindexField(id string, text string) {
+	tokens := lib.Tokenize(text)
 
 	for _, token := range tokens {
 		if docsInfo, ok := db.index.Get(token); ok {
-			var newDocsInfo []DocumentInfo
+			var newDocsInfo []DocInfo
 			for _, info := range docsInfo {
-				if info.docId != d.Id {
+				if info.docId != id {
 					newDocsInfo = append(newDocsInfo, info)
 				}
 			}
@@ -123,7 +129,22 @@ func (db *MemDB) deindexDocument(d *Document) {
 	}
 }
 
-func getDocumentInfoIndex(docsInfos []DocumentInfo, docId string) int {
+func getIndexFields(d any) []string {
+	fields := make([]string, 0)
+	val := reflect.ValueOf(d)
+	t := reflect.TypeOf(d)
+
+	for i := 0; i < val.NumField(); i++ {
+		f := t.Field(i)
+		if v, ok := f.Tag.Lookup("index"); ok && v == "true" {
+			fields = append(fields, val.Field(i).String())
+		}
+	}
+
+	return fields
+}
+
+func getDocumentInfoIndex(docsInfos []DocInfo, docId string) int {
 	for idx, info := range docsInfos {
 		if info.docId == docId {
 			return idx

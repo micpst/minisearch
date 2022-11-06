@@ -4,42 +4,48 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/micpst/full-text-search-engine/src/storage"
 )
 
+type Document struct {
+	Id       string `json:"id"`
+	Title    string `json:"title" xml:"title" binding:"required" index:"true"`
+	Url      string `json:"url" xml:"url" binding:"required"`
+	Abstract string `json:"abstract" xml:"abstract" binding:"required" index:"true"`
+}
+
 type SearchParams struct {
-	query string `form:"q" binding:"required"`
+	Query string `form:"q" binding:"required"`
 }
 
 func (a *App) createDocument(c *gin.Context) {
-	body := storage.Document{}
+	body := Document{}
 	if err := c.BindJSON(&body); err != nil {
 		return
 	}
 
-	doc, err := a.db.Create(body)
+	_, err := a.db.Create(body)
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusCreated, doc)
+	c.Status(http.StatusCreated)
 }
 
 func (a *App) updateDocument(c *gin.Context) {
 	id := c.Param("id")
-	body := storage.Document{}
+	body := Document{}
 	if err := c.BindJSON(&body); err != nil {
 		return
 	}
 
-	doc, err := a.db.Update(id, body)
+	err := a.db.Update(id, body)
 	if err != nil {
 		c.Status(http.StatusNotFound)
 		return
 	}
 
-	c.JSON(http.StatusOK, doc)
+	c.Status(http.StatusOK)
 }
 
 func (a *App) deleteDocument(c *gin.Context) {
@@ -48,14 +54,17 @@ func (a *App) deleteDocument(c *gin.Context) {
 		c.Status(http.StatusNotFound)
 		return
 	}
+
 	c.Status(http.StatusOK)
 }
 
-func (a *App) searchDocument(c *gin.Context) {
+func (a *App) searchDocuments(c *gin.Context) {
 	params := SearchParams{}
 	if err := c.Bind(&params); err != nil {
 		return
 	}
-	docs := a.db.Search(params.query)
+
+	docs := a.db.Search(params.Query)
+
 	c.JSON(http.StatusOK, docs)
 }
