@@ -1,4 +1,4 @@
-package storage
+package store
 
 import (
 	"fmt"
@@ -9,17 +9,24 @@ import (
 	"github.com/micpst/full-text-search-engine/src/lib"
 )
 
+type SchemaProps any
+
+type Record[Schema SchemaProps] struct {
+	Id string
+	S  Schema
+}
+
 type DocInfo struct {
 	docId string
 	freq  uint32
 }
 
-type MemDB[Schema any] struct {
+type MemDB[Schema SchemaProps] struct {
 	docs  *hashmap.Map[string, Schema]
 	index *hashmap.Map[string, []DocInfo]
 }
 
-func New[Schema any]() *MemDB[Schema] {
+func New[Schema SchemaProps]() *MemDB[Schema] {
 	return &MemDB[Schema]{
 		docs:  hashmap.New[string, Schema](),
 		index: hashmap.New[string, []DocInfo](),
@@ -77,9 +84,9 @@ func (db *MemDB[Schema]) Delete(id string) error {
 	return nil
 }
 
-func (db *MemDB[Schema]) Search(query string) []Schema {
-	docs := []Schema{}
-	infos := []DocInfo{}
+func (db *MemDB[Schema]) Search(query string) []Record[Schema] {
+	docs := make([]Record[Schema], 0)
+	infos := make([]DocInfo, 0)
 	tokens := lib.Tokenize(query)
 
 	for _, token := range tokens {
@@ -96,7 +103,7 @@ func (db *MemDB[Schema]) Search(query string) []Schema {
 
 	for _, info := range infos {
 		doc, _ := db.docs.Get(info.docId)
-		docs = append(docs, doc)
+		docs = append(docs, Record[Schema]{info.docId, doc})
 	}
 
 	return docs

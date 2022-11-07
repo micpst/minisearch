@@ -1,4 +1,4 @@
-package api
+package app
 
 func (a *App) initRoutes() {
 	a.router.GET("/api/v1/search", a.searchDocuments)

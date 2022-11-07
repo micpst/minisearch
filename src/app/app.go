@@ -1,20 +1,20 @@
-package api
+package app
 
 import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
-	"github.com/micpst/full-text-search-engine/src/storage"
+	"github.com/micpst/full-text-search-engine/src/store"
 )
 
 type App struct {
-	db     *storage.MemDB[Document]
+	db     *store.MemDB[Document]
 	router *gin.Engine
 }
 
 func New() *App {
 	app := &App{
-		db:     storage.New[Document](),
+		db:     store.New[Document](),
 		router: gin.Default(),
 	}
 	app.initRoutes()
