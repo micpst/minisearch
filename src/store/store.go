@@ -16,27 +16,27 @@ type Record[Schema SchemaProps] struct {
 	S  Schema
 }
 
-type DocInfo struct {
-	docId string
+type RecordInfo struct {
+	recId string
 	freq  uint32
 }
 
 type MemDB[Schema SchemaProps] struct {
 	docs  *hashmap.Map[string, Schema]
-	index *hashmap.Map[string, []DocInfo]
+	index *hashmap.Map[string, []RecordInfo]
 }
 
 func New[Schema SchemaProps]() *MemDB[Schema] {
 	return &MemDB[Schema]{
 		docs:  hashmap.New[string, Schema](),
-		index: hashmap.New[string, []DocInfo](),
+		index: hashmap.New[string, []RecordInfo](),
 	}
 }
 
-func (db *MemDB[Schema]) Create(doc Schema) (string, error) {
+func (db *MemDB[Schema]) Create(doc Schema) (Record[Schema], error) {
 	id := uuid.NewString()
 	if ok := db.docs.Insert(id, doc); !ok {
-		return "", fmt.Errorf("document cannot be created")
+		return Record[Schema]{}, fmt.Errorf("document cannot be created")
 	}
 
 	fields := getIndexFields(doc)
@@ -44,13 +44,13 @@ func (db *MemDB[Schema]) Create(doc Schema) (string, error) {
 		db.indexField(id, field)
 	}
 
-	return id, nil
+	return Record[Schema]{id, doc}, nil
 }
 
-func (db *MemDB[Schema]) Update(id string, doc Schema) error {
+func (db *MemDB[Schema]) Update(id string, doc Schema) (Record[Schema], error) {
 	prevDoc, ok := db.docs.Get(id)
 	if !ok {
-		return fmt.Errorf("document not found")
+		return Record[Schema]{}, fmt.Errorf("document not found")
 	}
 
 	db.docs.Set(id, doc)
@@ -65,7 +65,7 @@ func (db *MemDB[Schema]) Update(id string, doc Schema) error {
 		db.indexField(id, field)
 	}
 
-	return nil
+	return Record[Schema]{id, doc}, nil
 }
 
 func (db *MemDB[Schema]) Delete(id string) error {
@@ -85,15 +85,15 @@ func (db *MemDB[Schema]) Delete(id string) error {
 }
 
 func (db *MemDB[Schema]) Search(query string) []Record[Schema] {
-	docs := make([]Record[Schema], 0)
-	infos := make([]DocInfo, 0)
+	records := make([]Record[Schema], 0)
+	infos := make([]RecordInfo, 0)
 	tokens := lib.Tokenize(query)
 
 	for _, token := range tokens {
-		docsInfo, _ := db.index.Get(token)
+		recordsInfos, _ := db.index.Get(token)
 
-		for _, info := range docsInfo {
-			if idx := getDocumentInfoIndex(infos, info.docId); idx >= 0 {
+		for _, info := range recordsInfos {
+			if idx := findRecordInfo(infos, info.recId); idx >= 0 {
 				infos[idx].freq += info.freq
 			} else {
 				infos = append(infos, info)
@@ -102,11 +102,11 @@ func (db *MemDB[Schema]) Search(query string) []Record[Schema] {
 	}
 
 	for _, info := range infos {
-		doc, _ := db.docs.Get(info.docId)
-		docs = append(docs, Record[Schema]{info.docId, doc})
+		doc, _ := db.docs.Get(info.recId)
+		records = append(records, Record[Schema]{info.recId, doc})
 	}
 
-	return docs
+	return records
 }
 
 func (db *MemDB[Schema]) indexField(id string, text string) {
@@ -114,9 +114,9 @@ func (db *MemDB[Schema]) indexField(id string, text string) {
 	tokensCount := lib.Count(tokens)
 
 	for token, count := range tokensCount {
-		docsInfo, _ := db.index.GetOrInsert(token, []DocInfo{})
-		docsInfo = append(docsInfo, DocInfo{id, count})
-		db.index.Set(token, docsInfo)
+		recordsInfos, _ := db.index.GetOrInsert(token, []RecordInfo{})
+		recordsInfos = append(recordsInfos, RecordInfo{id, count})
+		db.index.Set(token, recordsInfos)
 	}
 }
 
@@ -124,22 +124,22 @@ func (db *MemDB[Schema]) deindexField(id string, text string) {
 	tokens := lib.Tokenize(text)
 
 	for _, token := range tokens {
-		if docsInfo, ok := db.index.Get(token); ok {
-			var newDocsInfo []DocInfo
-			for _, info := range docsInfo {
-				if info.docId != id {
-					newDocsInfo = append(newDocsInfo, info)
+		if recordsInfos, ok := db.index.Get(token); ok {
+			var newRecordsInfos []RecordInfo
+			for _, info := range recordsInfos {
+				if info.recId != id {
+					newRecordsInfos = append(newRecordsInfos, info)
 				}
 			}
-			db.index.Set(token, newDocsInfo)
+			db.index.Set(token, newRecordsInfos)
 		}
 	}
 }
 
-func getIndexFields(d any) []string {
+func getIndexFields(obj any) []string {
 	fields := make([]string, 0)
-	val := reflect.ValueOf(d)
-	t := reflect.TypeOf(d)
+	val := reflect.ValueOf(obj)
+	t := reflect.TypeOf(obj)
 
 	for i := 0; i < val.NumField(); i++ {
 		f := t.Field(i)
@@ -151,9 +151,9 @@ func getIndexFields(d any) []string {
 	return fields
 }
 
-func getDocumentInfoIndex(docsInfos []DocInfo, docId string) int {
-	for idx, info := range docsInfos {
-		if info.docId == docId {
+func findRecordInfo(infos []RecordInfo, id string) int {
+	for idx, info := range infos {
+		if info.recId == id {
 			return idx
 		}
 	}

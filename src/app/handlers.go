@@ -31,18 +31,13 @@ func (a *App) createDocument(c *gin.Context) {
 		return
 	}
 
-	id, err := a.db.Create(body)
+	doc, err := a.db.Create(body)
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusCreated, DocumentResponse{
-		Id:       id,
-		Title:    body.Title,
-		Url:      body.Url,
-		Abstract: body.Abstract,
-	})
+	c.JSON(http.StatusCreated, documentFromRecord(doc))
 }
 
 func (a *App) updateDocument(c *gin.Context) {
@@ -52,18 +47,13 @@ func (a *App) updateDocument(c *gin.Context) {
 		return
 	}
 
-	err := a.db.Update(id, body)
+	doc, err := a.db.Update(id, body)
 	if err != nil {
 		c.Status(http.StatusNotFound)
 		return
 	}
 
-	c.JSON(http.StatusOK, DocumentResponse{
-		Id:       id,
-		Title:    body.Title,
-		Url:      body.Url,
-		Abstract: body.Abstract,
-	})
+	c.JSON(http.StatusOK, documentFromRecord(doc))
 }
 
 func (a *App) deleteDocument(c *gin.Context) {
@@ -88,20 +78,25 @@ func (a *App) searchDocuments(c *gin.Context) {
 
 	c.JSON(http.StatusOK, SearchDocumentResponse{
 		Count:   len(docs),
-		Hits:    makeDocumentResponse(docs),
+		Hits:    documentListFromRecords(docs),
 		Elapsed: elapsed.Microseconds(),
 	})
 }
 
-func makeDocumentResponse(docs []store.Record[Document]) []DocumentResponse {
+func documentFromRecord(d store.Record[Document]) DocumentResponse {
+	return DocumentResponse{
+		Id:       d.Id,
+		Title:    d.S.Title,
+		Url:      d.S.Url,
+		Abstract: d.S.Abstract,
+	}
+}
+
+func documentListFromRecords(docs []store.Record[Document]) []DocumentResponse {
 	results := make([]DocumentResponse, 0)
 	for _, d := range docs {
-		results = append(results, DocumentResponse{
-			Id:       d.Id,
-			Title:    d.S.Title,
-			Url:      d.S.Url,
-			Abstract: d.S.Abstract,
-		})
+		doc := documentFromRecord(d)
+		results = append(results, doc)
 	}
 	return results
 }
