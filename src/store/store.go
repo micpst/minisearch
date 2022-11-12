@@ -33,7 +33,7 @@ func New[Schema SchemaProps]() *MemDB[Schema] {
 	}
 }
 
-func (db *MemDB[Schema]) Create(doc Schema) (Record[Schema], error) {
+func (db *MemDB[Schema]) Insert(doc Schema) (Record[Schema], error) {
 	id := uuid.NewString()
 	if ok := db.docs.Insert(id, doc); !ok {
 		return Record[Schema]{}, fmt.Errorf("document cannot be created")
@@ -45,6 +45,16 @@ func (db *MemDB[Schema]) Create(doc Schema) (Record[Schema], error) {
 	}
 
 	return Record[Schema]{id, doc}, nil
+}
+
+func (db *MemDB[Schema]) InsertBatch(docs []Schema, batchSize int) []error {
+	errs := make([]error, 0)
+	for _, d := range docs {
+		if _, err := db.Insert(d); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errs
 }
 
 func (db *MemDB[Schema]) Update(id string, doc Schema) (Record[Schema], error) {

@@ -17,6 +17,9 @@ func New() *App {
 		db:     store.New[Document](),
 		router: gin.Default(),
 	}
+
+	app.router.MaxMultipartMemory = 1 << 23
+
 	app.initRoutes()
 	return app
 }

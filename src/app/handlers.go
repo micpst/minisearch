@@ -1,6 +1,8 @@
 package app
 
 import (
+	"compress/gzip"
+	"encoding/xml"
 	"net/http"
 	"time"
 
@@ -15,14 +17,70 @@ type DocumentResponse struct {
 	Abstract string `json:"abstract"`
 }
 
-type SearchDocumentResponse struct {
+type SearchDocumentsResponse struct {
 	Count   int                `json:"count"`
 	Hits    []DocumentResponse `json:"hits"`
 	Elapsed int64              `json:"elapsed"`
 }
 
-type SearchDocumentParams struct {
+type UploadDocumentsResponse struct {
+	Total   int `json:"total"`
+	Success int `json:"success"`
+	Fail    int `json:"fail"`
+}
+
+type SearchDocumentsParams struct {
 	Query string `form:"q" binding:"required"`
+}
+
+type UploadDocumentsFileDump struct {
+	Documents []Document `xml:"doc"`
+}
+
+func (a *App) uploadDocuments(c *gin.Context) {
+	form, err := c.MultipartForm()
+	if err != nil {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	total := 0
+	failed := 0
+	files := form.File["file"]
+
+	for _, file := range files {
+		f, err := file.Open()
+		if err != nil {
+			c.Status(http.StatusBadRequest)
+			return
+		}
+
+		gz, err := gzip.NewReader(f)
+		if err != nil {
+			c.Status(http.StatusBadRequest)
+			return
+		}
+
+		d := xml.NewDecoder(gz)
+		dump := UploadDocumentsFileDump{}
+		if err := d.Decode(&dump); err != nil {
+			c.Status(http.StatusBadRequest)
+			return
+		}
+
+		errs := a.db.InsertBatch(dump.Documents, 10000)
+		total += len(dump.Documents)
+		failed += len(errs)
+
+		_ = f.Close()
+		_ = gz.Close()
+	}
+
+	c.JSON(http.StatusOK, UploadDocumentsResponse{
+		Total:   total,
+		Success: total - failed,
+		Fail:    failed,
+	})
 }
 
 func (a *App) createDocument(c *gin.Context) {
@@ -31,7 +89,7 @@ func (a *App) createDocument(c *gin.Context) {
 		return
 	}
 
-	doc, err := a.db.Create(body)
+	doc, err := a.db.Insert(body)
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
@@ -67,7 +125,7 @@ func (a *App) deleteDocument(c *gin.Context) {
 }
 
 func (a *App) searchDocuments(c *gin.Context) {
-	params := SearchDocumentParams{}
+	params := SearchDocumentsParams{}
 	if err := c.Bind(&params); err != nil {
 		return
 	}
@@ -76,7 +134,7 @@ func (a *App) searchDocuments(c *gin.Context) {
 	docs := a.db.Search(params.Query)
 	elapsed := time.Since(start)
 
-	c.JSON(http.StatusOK, SearchDocumentResponse{
+	c.JSON(http.StatusOK, SearchDocumentsResponse{
 		Count:   len(docs),
 		Hits:    documentListFromRecords(docs),
 		Elapsed: elapsed.Microseconds(),
