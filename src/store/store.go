@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/cornelk/hashmap"
 	"github.com/google/uuid"
@@ -48,12 +49,39 @@ func (db *MemDB[Schema]) Insert(doc Schema) (Record[Schema], error) {
 }
 
 func (db *MemDB[Schema]) InsertBatch(docs []Schema, batchSize int) []error {
-	errs := make([]error, 0)
-	for _, d := range docs {
-		if _, err := db.Insert(d); err != nil {
-			errs = append(errs, err)
-		}
+	n := len(docs) / batchSize
+	in := make(chan Schema)
+	out := make(chan error)
+
+	var wg sync.WaitGroup
+	wg.Add(n)
+
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			for d := range in {
+				if _, err := db.Insert(d); err != nil {
+					out <- err
+				}
+			}
+		}()
 	}
+	go func() {
+		for _, d := range docs {
+			in <- d
+		}
+		close(in)
+	}()
+	go func() {
+		wg.Wait()
+		close(out)
+	}()
+
+	errs := make([]error, 0)
+	for err := range out {
+		errs = append(errs, err)
+	}
+
 	return errs
 }
 

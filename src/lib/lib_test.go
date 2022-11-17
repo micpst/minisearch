@@ -2,22 +2,18 @@ package lib
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-type TokenizeTestCase struct {
-	input    string
-	expected []string
-}
-
-type CountTestCase struct {
-	input    []string
-	expected map[string]uint32
+type TestCase[Input any, Expected any] struct {
+	input    Input
+	expected Expected
 }
 
 func TestTokenize(t *testing.T) {
-	cases := []TokenizeTestCase{
+	cases := []TestCase[string, []string]{
 		{
 			input:    "",
 			expected: []string{},
@@ -35,15 +31,13 @@ func TestTokenize(t *testing.T) {
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("'%v'", c.input), func(t *testing.T) {
 			actual := Tokenize(c.input)
-			if !reflect.DeepEqual(actual, c.expected) {
-				t.Fatalf("Expected %v, got %v", c.expected, actual)
-			}
+			assert.Equal(t, c.expected, actual)
 		})
 	}
 }
 
 func TestCountTokens(t *testing.T) {
-	cases := []CountTestCase{
+	cases := []TestCase[[]string, map[string]uint32]{
 		{
 			input:    []string{},
 			expected: map[string]uint32{},
@@ -61,9 +55,7 @@ func TestCountTokens(t *testing.T) {
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%v", c.input), func(t *testing.T) {
 			actual := Count(c.input)
-			if !reflect.DeepEqual(actual, c.expected) {
-				t.Fatalf("Expected %v, got %v", c.expected, actual)
-			}
+			assert.Equal(t, c.expected, actual)
 		})
 	}
 }
