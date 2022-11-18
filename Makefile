@@ -1,7 +1,7 @@
 BINARY_DIR=bin
 BINARY_NAME=server
 BINARY_PATH=$(BINARY_DIR)/$(BINARY_NAME)
-DOCKER_IMAGE=search-engine-rest
+DOCKER_IMAGE=fts-engine
 DOCKER_PORT=3000
 WATCH_PORT=3001
 COVERAGE_PROFILE=cover.out
@@ -32,7 +32,7 @@ watch:
 		-v $(shell pwd):/go/src/$(PACKAGE_NAME) \
 		-p $(WATCH_PORT):$(WATCH_PORT) \
 		cosmtrek/air \
-		--build.cmd "make build" \
+		--build.cmd "go build -race -o $(BINARY_PATH) ./src" \
 		--build.bin "./$(BINARY_PATH) -p $(WATCH_PORT)"
 
 # Test:
@@ -48,9 +48,11 @@ lint:
 	@golangci-lint run
 
 # Docker:
-docker-build-run:
+docker-build:
 	@docker build -t $(DOCKER_IMAGE) .
-	@docker run --rm --name $(DOCKER_IMAGE) -d -p $(DOCKER_PORT):$(DOCKER_PORT) $(DOCKER_IMAGE) -p $(DOCKER_PORT)
 
 docker-run:
 	@docker run --rm --name $(DOCKER_IMAGE) -d -p $(DOCKER_PORT):$(DOCKER_PORT) $(DOCKER_IMAGE) -p $(DOCKER_PORT)
+
+docker-stop:
+	@docker stop $(DOCKER_IMAGE)
