@@ -3,11 +3,13 @@ package store
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/cornelk/hashmap"
 	"github.com/google/uuid"
 	"github.com/micpst/full-text-search-engine/src/lib"
+	"golang.org/x/exp/slices"
 )
 
 type SchemaProps any
@@ -20,6 +22,11 @@ type Record[Schema SchemaProps] struct {
 type RecordInfo struct {
 	recId string
 	freq  uint32
+}
+
+type SearchParams struct {
+	Query string
+	Exact bool
 }
 
 type MemDB[Schema SchemaProps] struct {
@@ -40,10 +47,7 @@ func (db *MemDB[Schema]) Insert(doc Schema) (Record[Schema], error) {
 		return Record[Schema]{}, fmt.Errorf("document cannot be created")
 	}
 
-	fields := getIndexFields(doc)
-	for _, field := range fields {
-		db.indexField(id, field)
-	}
+	db.indexDocument(id, doc)
 
 	return Record[Schema]{id, doc}, nil
 }
@@ -91,17 +95,9 @@ func (db *MemDB[Schema]) Update(id string, doc Schema) (Record[Schema], error) {
 		return Record[Schema]{}, fmt.Errorf("document not found")
 	}
 
+	db.deindexDocument(id, prevDoc)
 	db.docs.Set(id, doc)
-
-	fields := getIndexFields(prevDoc)
-	for _, field := range fields {
-		db.deindexField(id, field)
-	}
-
-	fields = getIndexFields(doc)
-	for _, field := range fields {
-		db.indexField(id, field)
-	}
+	db.indexDocument(id, doc)
 
 	return Record[Schema]{id, doc}, nil
 }
@@ -112,42 +108,44 @@ func (db *MemDB[Schema]) Delete(id string) error {
 		return fmt.Errorf("document not found")
 	}
 
+	db.deindexDocument(id, doc)
 	db.docs.Del(id)
-
-	fields := getIndexFields(doc)
-	for _, field := range fields {
-		db.deindexField(id, field)
-	}
 
 	return nil
 }
 
-func (db *MemDB[Schema]) Search(query string) []Record[Schema] {
+func (db *MemDB[Schema]) Search(params SearchParams) []Record[Schema] {
+	recordsIds := make([]string, 0)
 	records := make([]Record[Schema], 0)
-	infos := make([]RecordInfo, 0)
-	tokens := lib.Tokenize(query)
+	tokens := lib.Tokenize(params.Query)
 
-	for _, token := range tokens {
-		recordsInfos, _ := db.index.Get(token)
-
-		for _, info := range recordsInfos {
-			if idx := findRecordInfo(infos, info.recId); idx >= 0 {
-				infos[idx].freq += info.freq
-			} else {
-				infos = append(infos, info)
+	for i, token := range tokens {
+		infos, _ := db.index.Get(token)
+		if params.Exact && i > 0 {
+			for j, id := range recordsIds {
+				if slices.IndexFunc(infos, func(info RecordInfo) bool { return info.recId == id }) == -1 {
+					recordsIds = append(recordsIds[:j], recordsIds[j+1:]...)
+				}
+			}
+		} else {
+			for _, info := range infos {
+				if slices.IndexFunc(recordsIds, func(id string) bool { return id == info.recId }) == -1 {
+					recordsIds = append(recordsIds, info.recId)
+				}
 			}
 		}
 	}
 
-	for _, info := range infos {
-		doc, _ := db.docs.Get(info.recId)
-		records = append(records, Record[Schema]{info.recId, doc})
+	for _, id := range recordsIds {
+		doc, _ := db.docs.Get(id)
+		records = append(records, Record[Schema]{id, doc})
 	}
 
 	return records
 }
 
-func (db *MemDB[Schema]) indexField(id string, text string) {
+func (db *MemDB[Schema]) indexDocument(id string, doc Schema) {
+	text := strings.Join(getIndexFields(doc), " ")
 	tokens := lib.Tokenize(text)
 	tokensCount := lib.Count(tokens)
 
@@ -158,7 +156,8 @@ func (db *MemDB[Schema]) indexField(id string, text string) {
 	}
 }
 
-func (db *MemDB[Schema]) deindexField(id string, text string) {
+func (db *MemDB[Schema]) deindexDocument(id string, doc Schema) {
+	text := strings.Join(getIndexFields(doc), " ")
 	tokens := lib.Tokenize(text)
 
 	for _, token := range tokens {
@@ -187,13 +186,4 @@ func getIndexFields(obj any) []string {
 	}
 
 	return fields
-}
-
-func findRecordInfo(infos []RecordInfo, id string) int {
-	for idx, info := range infos {
-		if info.recId == id {
-			return idx
-		}
-	}
-	return -1
 }

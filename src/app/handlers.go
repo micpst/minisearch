@@ -31,6 +31,7 @@ type UploadDocumentsResponse struct {
 
 type SearchDocumentsParams struct {
 	Query string `form:"q" binding:"required"`
+	Exact bool   `form:"exact" default:"false"`
 }
 
 type UploadDocumentsFileDump struct {
@@ -131,7 +132,7 @@ func (a *App) searchDocuments(c *gin.Context) {
 	}
 
 	start := time.Now()
-	docs := a.db.Search(params.Query)
+	docs := a.db.Search(store.SearchParams(params))
 	elapsed := time.Since(start)
 
 	c.JSON(http.StatusOK, SearchDocumentsResponse{
