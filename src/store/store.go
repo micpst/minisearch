@@ -9,7 +9,6 @@ import (
 	"github.com/cornelk/hashmap"
 	"github.com/google/uuid"
 	"github.com/micpst/full-text-search-engine/src/lib"
-	"golang.org/x/exp/slices"
 )
 
 type SchemaProps any
@@ -115,30 +114,22 @@ func (db *MemDB[Schema]) Delete(id string) error {
 }
 
 func (db *MemDB[Schema]) Search(params SearchParams) []Record[Schema] {
-	recordsIds := make([]string, 0)
+	recordsIds := make(map[string]int)
 	records := make([]Record[Schema], 0)
 	tokens := lib.Tokenize(params.Query)
 
-	for i, token := range tokens {
+	for _, token := range tokens {
 		infos, _ := db.index.Get(token)
-		if params.Exact && i > 0 {
-			for j, id := range recordsIds {
-				if slices.IndexFunc(infos, func(info RecordInfo) bool { return info.recId == id }) == -1 {
-					recordsIds = append(recordsIds[:j], recordsIds[j+1:]...)
-				}
-			}
-		} else {
-			for _, info := range infos {
-				if slices.IndexFunc(recordsIds, func(id string) bool { return id == info.recId }) == -1 {
-					recordsIds = append(recordsIds, info.recId)
-				}
-			}
+		for _, info := range infos {
+			recordsIds[info.recId] += 1
 		}
 	}
 
-	for _, id := range recordsIds {
-		doc, _ := db.docs.Get(id)
-		records = append(records, Record[Schema]{id, doc})
+	for id, tokensCount := range recordsIds {
+		if !params.Exact || tokensCount == len(tokens) {
+			doc, _ := db.docs.Get(id)
+			records = append(records, Record[Schema]{id, doc})
+		}
 	}
 
 	return records
