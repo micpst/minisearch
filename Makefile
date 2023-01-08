@@ -2,13 +2,14 @@ BINARY_DIR=bin
 BINARY_NAME=server
 BINARY_PATH=$(BINARY_DIR)/$(BINARY_NAME)
 DOCKER_IMAGE=fts-engine
+DOCKER_IMAGE_DEV=fts-engine-dev
 DOCKER_PORT=3000
 WATCH_PORT=3001
 COVERAGE_PROFILE=cover.out
 
 .PHONY: vendor
 
-all: lint test
+all: lint test build
 
 # Build:
 get:
@@ -45,11 +46,20 @@ coverage:
 
 # Lint
 lint:
-	@golangci-lint run
+	@golangci-lint run --timeout=3m
 
 # Docker:
+docker-dev-build:
+	@docker build -t $(DOCKER_IMAGE_DEV) --target dev .
+
+docker-check:
+	@docker run --rm -v $(shell pwd):/app $(DOCKER_IMAGE_DEV)
+
+docker-test:
+	@docker run --rm -v $(shell pwd):/app $(DOCKER_IMAGE_DEV) test
+
 docker-build:
-	@docker build -t $(DOCKER_IMAGE) .
+	@docker build -t $(DOCKER_IMAGE) --target prod .
 
 docker-run:
 	@docker run --rm --name $(DOCKER_IMAGE) -d -p $(DOCKER_PORT):$(DOCKER_PORT) $(DOCKER_IMAGE) -p $(DOCKER_PORT)
