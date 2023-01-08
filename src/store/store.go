@@ -19,8 +19,7 @@ type Record[Schema SchemaProps] struct {
 }
 
 type RecordInfo struct {
-	recId string
-	freq  uint32
+	freq uint32
 }
 
 type SearchParams struct {
@@ -30,13 +29,13 @@ type SearchParams struct {
 
 type MemDB[Schema SchemaProps] struct {
 	docs  *hashmap.Map[string, Schema]
-	index *hashmap.Map[string, []RecordInfo]
+	index *hashmap.Map[string, *hashmap.Map[string, RecordInfo]]
 }
 
 func New[Schema SchemaProps]() *MemDB[Schema] {
 	return &MemDB[Schema]{
 		docs:  hashmap.New[string, Schema](),
-		index: hashmap.New[string, []RecordInfo](),
+		index: hashmap.New[string, *hashmap.Map[string, RecordInfo]](),
 	}
 }
 
@@ -120,9 +119,10 @@ func (db *MemDB[Schema]) Search(params SearchParams) []Record[Schema] {
 
 	for _, token := range tokens {
 		infos, _ := db.index.Get(token)
-		for _, info := range infos {
-			recordsIds[info.recId] += 1
-		}
+		infos.Range(func(id string, info RecordInfo) bool {
+			recordsIds[id] += 1
+			return true
+		})
 	}
 
 	for id, tokensCount := range recordsIds {
@@ -141,9 +141,8 @@ func (db *MemDB[Schema]) indexDocument(id string, doc Schema) {
 	tokensCount := lib.Count(tokens)
 
 	for token, count := range tokensCount {
-		recordsInfos, _ := db.index.GetOrInsert(token, []RecordInfo{})
-		recordsInfos = append(recordsInfos, RecordInfo{id, count})
-		db.index.Set(token, recordsInfos)
+		recordsInfos, _ := db.index.GetOrInsert(token, hashmap.New[string, RecordInfo]())
+		recordsInfos.Insert(id, RecordInfo{count})
 	}
 }
 
@@ -153,13 +152,7 @@ func (db *MemDB[Schema]) deindexDocument(id string, doc Schema) {
 
 	for _, token := range tokens {
 		if recordsInfos, ok := db.index.Get(token); ok {
-			var newRecordsInfos []RecordInfo
-			for _, info := range recordsInfos {
-				if info.recId != id {
-					newRecordsInfos = append(newRecordsInfos, info)
-				}
-			}
-			db.index.Set(token, newRecordsInfos)
+			recordsInfos.Del(id)
 		}
 	}
 }
