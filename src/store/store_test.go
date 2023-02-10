@@ -1,52 +1,152 @@
 package store
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-type TestSchema struct {
-	NonIndexField string `index:"-"`
-	IndexField    string `index:"true"`
+type TestCase[Given any, Expected any] struct {
+	given    Given
+	expected Expected
+}
+
+type User struct {
+	Name   string `index:"name"`
+	Email  string `index:"email"`
+	Joined string
+}
+
+type Document struct {
+	Title    string `index:"title"`
+	Abstract string `index:"abstract"`
+	Url      string
+	Author   User `index:"author"`
+}
+
+var testData = []User{
+	{"name_01", "email_01@email.com", "2023-02-10T15:04:05Z07:00"},
+	{"name_02", "email_02@email.com", "2023-02-10T15:04:06Z07:00"},
+	{"name_03", "email_03@email.com", "2023-02-10T15:04:07Z07:00"},
+	{"name_04", "email_04@email.com", "2023-02-10T15:04:08Z07:00"},
+	{"name_05", "email_05@email.com", "2023-02-10T15:04:09Z07:00"},
+	{"name_06", "email_06@email.com", "2023-02-10T15:04:10Z07:00"},
+	{"name_07", "email_07@email.com", "2023-02-10T15:04:11Z07:00"},
+	{"name_08", "email_08@email.com", "2023-02-10T15:04:12Z07:00"},
+	{"name_09", "email_09@email.com", "2023-02-10T15:04:13Z07:00"},
+	{"name_10", "email_10@email.com", "2023-02-10T15:04:14Z07:00"},
 }
 
 func TestInsert(t *testing.T) {
-	db := New[TestSchema]()
-	data := TestSchema{"test_01", "test_01"}
+	db := New[User]()
+	data := testData[0]
 
-	v, err := db.Insert(data)
+	v, _ := db.Insert(data)
 
-	if err != nil {
-		assert.Equal(t, 0, db.docs.Len())
-		assert.Equal(t, 0, db.index.Len())
-		assert.Empty(t, v.Id)
-		assert.Equal(t, TestSchema{}, v.S)
-	} else {
-		assert.Equal(t, 1, db.docs.Len())
-		assert.Equal(t, 1, db.index.Len())
-		assert.NotEmpty(t, v.Id)
-		assert.Equal(t, data, v.S)
-	}
+	assert.NotEmpty(t, v.Id)
+	assert.Equal(t, data, v.S)
+
+	assert.Equal(t, 1, db.docs.Len())
+	assert.Equal(t, 2, db.indexes.Len())
+
+	db.indexes.Range(func(propName string, index *MemIndex) bool {
+		assert.Equal(t, 1, index.Len())
+		return true
+	})
 }
 
 func TestInsertBatch(t *testing.T) {
-	db := New[TestSchema]()
-	data := []TestSchema{
-		{"test_01", "test_01"},
-		{"test_02", "test_02"},
-		{"test_03", "test_03"},
-		{"test_04", "test_04"},
-		{"test_05", "test_05"},
-		{"test_06", "test_06"},
-		{"test_07", "test_07"},
-		{"test_08", "test_08"},
-		{"test_09", "test_09"},
-		{"test_10", "test_10"},
+	db := New[User]()
+
+	errs := db.InsertBatch(testData, 2)
+	numInserted := len(testData) - len(errs)
+
+	assert.Equal(t, numInserted, db.docs.Len())
+	assert.Equal(t, 2, db.indexes.Len())
+
+	db.indexes.Range(func(propName string, index *MemIndex) bool {
+		assert.Equal(t, numInserted, index.Len())
+		return true
+	})
+}
+
+func TestSearch(t *testing.T) {
+	cases := []TestCase[SearchParams, []User]{
+		{
+			given: SearchParams{
+				Query:      "name_01",
+				Properties: []string{"name"},
+				BoolMode:   AND,
+			},
+			expected: []User{
+				{"name_01", "email_01@email.com", "2023-02-10T15:04:05Z07:00"},
+			},
+		},
+		{
+			given: SearchParams{
+				Query:      "name_01 name_02",
+				Properties: []string{"name"},
+				BoolMode:   OR,
+			},
+			expected: []User{
+				{"name_01", "email_01@email.com", "2023-02-10T15:04:05Z07:00"},
+				{"name_02", "email_02@email.com", "2023-02-10T15:04:06Z07:00"},
+			},
+		},
 	}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
+			db := New[User]()
+			_ = db.InsertBatch(testData, 2)
 
-	errs := db.InsertBatch(data, 10)
+			actual := db.Search(c.given)
 
-	assert.Equal(t, len(data)-len(errs), db.docs.Len())
-	assert.Equal(t, len(data)-len(errs), db.index.Len())
+			assert.Equal(t, len(c.expected), len(actual))
+
+			for i := range c.expected {
+				assert.Equal(t, c.expected[i], actual[i].S)
+			}
+		})
+	}
+}
+
+func TestSchemaToFlatMap(t *testing.T) {
+	cases := []TestCase[any, map[string]string]{
+		{
+			given: User{
+				Name:   "micpst",
+				Email:  "micpst@email.com",
+				Joined: "2023-02-10T15:04:05Z07:00",
+			},
+			expected: map[string]string{
+				"name":  "micpst",
+				"email": "micpst@email.com",
+			},
+		},
+		{
+			given: Document{
+				Title:    "The Silicon Brain",
+				Abstract: "The human brain is often described as complex and while this is certainly true in many ways, its computational substrate is quite easy to understand.",
+				Url:      "https://micpst.com/posts/silicon-brain",
+				Author: User{
+					Name:   "micpst",
+					Email:  "micpst@email.com",
+					Joined: "2023-02-10T15:04:05Z07:00",
+				},
+			},
+			expected: map[string]string{
+				"title":        "The Silicon Brain",
+				"abstract":     "The human brain is often described as complex and while this is certainly true in many ways, its computational substrate is quite easy to understand.",
+				"author.name":  "micpst",
+				"author.email": "micpst@email.com",
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
+			actual := schemaToFlatMap(c.given)
+			assert.Equal(t, c.expected, actual)
+		})
+	}
 }

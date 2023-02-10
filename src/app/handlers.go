@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"encoding/xml"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -30,8 +31,9 @@ type UploadDocumentsResponse struct {
 }
 
 type SearchDocumentsParams struct {
-	Query string `form:"q" binding:"required"`
-	Exact bool   `form:"exact" default:"false"`
+	Query      string     `form:"query" binding:"required"`
+	Properties string     `form:"properties"`
+	BoolMode   store.Mode `form:"bool_mode"`
 }
 
 type UploadDocumentsFileDump struct {
@@ -47,7 +49,7 @@ func (a *App) uploadDocuments(c *gin.Context) {
 
 	total := 0
 	failed := 0
-	files := form.File["file"]
+	files := form.File["file[]"]
 
 	for _, file := range files {
 		f, err := file.Open()
@@ -126,13 +128,20 @@ func (a *App) deleteDocument(c *gin.Context) {
 }
 
 func (a *App) searchDocuments(c *gin.Context) {
-	params := SearchDocumentsParams{}
+	params := SearchDocumentsParams{
+		Properties: store.WILDCARD,
+		BoolMode:   store.AND,
+	}
 	if err := c.Bind(&params); err != nil {
 		return
 	}
 
 	start := time.Now()
-	docs := a.db.Search(store.SearchParams(params))
+	docs := a.db.Search(store.SearchParams{
+		Query:      params.Query,
+		Properties: strings.Split(params.Properties, ","),
+		BoolMode:   params.BoolMode,
+	})
 	elapsed := time.Since(start)
 
 	c.JSON(http.StatusOK, SearchDocumentsResponse{

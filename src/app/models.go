@@ -1,7 +1,7 @@
 package app
 
 type Document struct {
-	Title    string `json:"title" xml:"title" binding:"required" index:"true"`
+	Title    string `json:"title" xml:"title" index:"title" binding:"required" `
 	Url      string `json:"url" xml:"url" binding:"required"`
-	Abstract string `json:"abstract" xml:"abstract" binding:"required" index:"true"`
+	Abstract string `json:"abstract" xml:"abstract" index:"abstract" binding:"required"`
 }
