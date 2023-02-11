@@ -1,4 +1,4 @@
-package app
+package api
 
 type Document struct {
 	Title    string `json:"title" xml:"title" index:"title" binding:"required" `

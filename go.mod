@@ -1,4 +1,4 @@
-module github.com/micpst/full-text-search-engine
+module github.com/micpst/fts-engine
 
 go 1.19
 

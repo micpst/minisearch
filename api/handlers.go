@@ -1,4 +1,4 @@
-package app
+package api
 
 import (
 	"compress/gzip"
@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/micpst/full-text-search-engine/src/store"
+	"github.com/micpst/fts-engine/pkg/store"
 )
 
 type DocumentResponse struct {
@@ -40,7 +40,7 @@ type UploadDocumentsFileDump struct {
 	Documents []Document `xml:"doc"`
 }
 
-func (a *App) uploadDocuments(c *gin.Context) {
+func (s *Server) uploadDocuments(c *gin.Context) {
 	form, err := c.MultipartForm()
 	if err != nil {
 		c.Status(http.StatusBadRequest)
@@ -71,7 +71,7 @@ func (a *App) uploadDocuments(c *gin.Context) {
 			return
 		}
 
-		errs := a.db.InsertBatch(dump.Documents, 10000)
+		errs := s.db.InsertBatch(dump.Documents, 10000)
 		total += len(dump.Documents)
 		failed += len(errs)
 
@@ -86,13 +86,13 @@ func (a *App) uploadDocuments(c *gin.Context) {
 	})
 }
 
-func (a *App) createDocument(c *gin.Context) {
+func (s *Server) createDocument(c *gin.Context) {
 	body := Document{}
 	if err := c.BindJSON(&body); err != nil {
 		return
 	}
 
-	doc, err := a.db.Insert(body)
+	doc, err := s.db.Insert(body)
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
@@ -101,14 +101,14 @@ func (a *App) createDocument(c *gin.Context) {
 	c.JSON(http.StatusCreated, documentFromRecord(doc))
 }
 
-func (a *App) updateDocument(c *gin.Context) {
+func (s *Server) updateDocument(c *gin.Context) {
 	id := c.Param("id")
 	body := Document{}
 	if err := c.BindJSON(&body); err != nil {
 		return
 	}
 
-	doc, err := a.db.Update(id, body)
+	doc, err := s.db.Update(id, body)
 	if err != nil {
 		c.Status(http.StatusNotFound)
 		return
@@ -117,9 +117,9 @@ func (a *App) updateDocument(c *gin.Context) {
 	c.JSON(http.StatusOK, documentFromRecord(doc))
 }
 
-func (a *App) deleteDocument(c *gin.Context) {
+func (s *Server) deleteDocument(c *gin.Context) {
 	id := c.Param("id")
-	if err := a.db.Delete(id); err != nil {
+	if err := s.db.Delete(id); err != nil {
 		c.Status(http.StatusNotFound)
 		return
 	}
@@ -127,7 +127,7 @@ func (a *App) deleteDocument(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-func (a *App) searchDocuments(c *gin.Context) {
+func (s *Server) searchDocuments(c *gin.Context) {
 	params := SearchDocumentsParams{
 		Properties: store.WILDCARD,
 		BoolMode:   store.AND,
@@ -137,7 +137,7 @@ func (a *App) searchDocuments(c *gin.Context) {
 	}
 
 	start := time.Now()
-	docs := a.db.Search(store.SearchParams{
+	docs := s.db.Search(store.SearchParams{
 		Query:      params.Query,
 		Properties: strings.Split(params.Properties, ","),
 		BoolMode:   params.BoolMode,

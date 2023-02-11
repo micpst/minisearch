@@ -1,22 +1,22 @@
 BINARY_DIR=bin
 BINARY_NAME=server
 BINARY_PATH=$(BINARY_DIR)/$(BINARY_NAME)
+COVERAGE_PROFILE=cover.out
 DOCKER_IMAGE=fts-engine
 DOCKER_IMAGE_DEV=fts-engine-dev
 DOCKER_PORT=3000
 WATCH_PORT=3001
-COVERAGE_PROFILE=cover.out
 
 .PHONY: vendor
 
-all: lint test build
+all: lint coverage build
 
 # Build:
-get:
-	@go get ./src
+setup:
+	@go mod download
 
 build:
-	@go build -o $(BINARY_PATH) ./src
+	@go build -o $(BINARY_PATH) ./cmd/server
 
 clean:
 	@go clean --cache
@@ -33,7 +33,7 @@ watch:
 		-v $(shell pwd):/go/src/$(PACKAGE_NAME) \
 		-p $(WATCH_PORT):$(WATCH_PORT) \
 		cosmtrek/air \
-		--build.cmd "go build -race -o $(BINARY_PATH) ./src" \
+		--build.cmd "go build -race -o $(BINARY_PATH) ./cmd/server" \
 		--build.bin "./$(BINARY_PATH) -p $(WATCH_PORT)"
 
 # Test:
@@ -41,23 +41,28 @@ test:
 	@go test -v -race ./...
 
 coverage:
-	@go test -cover -covermode=count -coverprofile=$(COVERAGE_PROFILE) ./...
+	@go test -v -race -cover -covermode=atomic -coverprofile=$(COVERAGE_PROFILE) ./...
 	@go tool cover -func $(COVERAGE_PROFILE)
 
 # Lint
 lint:
 	@golangci-lint run --timeout=3m
 
-# Docker:
-docker-dev-build:
+# Docker dev:
+docker-dev-setup:
 	@docker build -t $(DOCKER_IMAGE_DEV) --target dev .
+	@docker run --rm --name $(DOCKER_IMAGE_DEV) -v $(shell pwd):/app $(DOCKER_IMAGE_DEV)
+
+docker-dev-stop:
+	@docker stop $(DOCKER_IMAGE_DEV)
 
 docker-check:
-	@docker run --rm -v $(shell pwd):/app $(DOCKER_IMAGE_DEV)
+	@docker exec $(DOCKER_IMAGE_DEV) make
 
 docker-test:
-	@docker run --rm -v $(shell pwd):/app $(DOCKER_IMAGE_DEV) test
+	@docker exec $(DOCKER_IMAGE_DEV) make test
 
+# Docker prod:
 docker-build:
 	@docker build -t $(DOCKER_IMAGE) --target prod .
 

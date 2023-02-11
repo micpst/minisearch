@@ -14,18 +14,22 @@ WORKDIR /app
 
 COPY --from=base /go/pkg/mod /go/pkg/mod
 
-ENTRYPOINT ["make"]
+ENTRYPOINT ["tail", "-f", "/dev/null"]
 
 FROM base AS build
 
-COPY src ./src
+COPY api ./api
+COPY cmd ./cmd
+COPY pkg ./pkg
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go build -o ./bin/server ./src
+    go build -o ./bin/server ./cmd/server
 
 FROM gcr.io/distroless/base-debian11 AS prod
 
 COPY --from=build /app/bin/server /
+
+ENV GIN_MODE=release
 
 USER nonroot:nonroot
 

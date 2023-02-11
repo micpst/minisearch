@@ -8,7 +8,7 @@ import (
 
 	"github.com/cornelk/hashmap"
 	"github.com/google/uuid"
-	"github.com/micpst/full-text-search-engine/src/lib"
+	"github.com/micpst/fts-engine/pkg/lib"
 )
 
 type SchemaProps any
