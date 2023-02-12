@@ -64,7 +64,7 @@ docker-test:
 
 # Docker prod:
 docker-build:
-	@docker build -t $(DOCKER_IMAGE) --target prod .
+	@docker build -t $(DOCKER_IMAGE) --target release .
 
 docker-run:
 	@docker run --rm --name $(DOCKER_IMAGE) -d -p $(DOCKER_PORT):$(DOCKER_PORT) $(DOCKER_IMAGE) -p $(DOCKER_PORT)
