@@ -1,6 +1,7 @@
 BINARY_DIR=bin
 BINARY_NAME=server
 BINARY_PATH=$(BINARY_DIR)/$(BINARY_NAME)
+RELEASE_NAME=fts-engine
 COVERAGE_PROFILE=cover.out
 DOCKER_IMAGE=fts-engine
 DOCKER_IMAGE_DEV=fts-engine-dev
@@ -47,6 +48,12 @@ coverage:
 # Lint
 lint:
 	@golangci-lint run --timeout=3m
+
+# Release:
+release:
+	@go build -o $(BINARY_NAME) ./cmd/server
+	@tar -czvf $(RELEASE_NAME).tar.gz $(BINARY_NAME) README.md LICENSE.md
+	@rm $(BINARY_NAME)
 
 # Docker dev:
 docker-dev-setup:
