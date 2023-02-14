@@ -62,7 +62,7 @@ func New[Schema SchemaProps]() *MemDB[Schema] {
 
 func (db *MemDB[Schema]) buildIndexes() {
 	var s Schema
-	for key := range schemaToFlatMap(s) {
+	for key := range flattenSchema(s) {
 		db.indexes.Set(key, NewIndex())
 	}
 }
@@ -73,7 +73,7 @@ func (db *MemDB[Schema]) Insert(doc Schema) (Record[Schema], error) {
 		return Record[Schema]{}, fmt.Errorf("document cannot be created")
 	}
 
-	docMap := schemaToFlatMap(doc)
+	docMap := flattenSchema(doc)
 
 	db.indexes.Range(func(propName string, index *MemIndex) bool {
 		index.Add(id, docMap[propName])
@@ -128,8 +128,8 @@ func (db *MemDB[Schema]) Update(id string, doc Schema) (Record[Schema], error) {
 		return Record[Schema]{}, fmt.Errorf("document not found")
 	}
 
-	docMap := schemaToFlatMap(doc)
-	prevDocMap := schemaToFlatMap(prevDoc)
+	docMap := flattenSchema(doc)
+	prevDocMap := flattenSchema(prevDoc)
 
 	db.indexes.Range(func(propName string, index *MemIndex) bool {
 		index.Remove(id, prevDocMap[propName])
@@ -152,7 +152,7 @@ func (db *MemDB[Schema]) Delete(id string) error {
 		return fmt.Errorf("document not found")
 	}
 
-	docMap := schemaToFlatMap(doc)
+	docMap := flattenSchema(doc)
 
 	db.indexes.Range(func(propName string, index *MemIndex) bool {
 		index.Remove(id, docMap[propName])
@@ -172,7 +172,7 @@ func (db *MemDB[Schema]) Search(params SearchParams) []Record[Schema] {
 	if len(params.Properties) == 1 && params.Properties[0] == WILDCARD {
 		props = make([]string, 0)
 		var s Schema
-		for key := range schemaToFlatMap(s) {
+		for key := range flattenSchema(s) {
 			props = append(props, key)
 		}
 	}
@@ -206,7 +206,6 @@ func NewIndex() *MemIndex {
 func (idx *MemIndex) Add(id string, text string) {
 	tokens := lib.Tokenize(text)
 	tokensCount := lib.Count(tokens)
-
 	for token, count := range tokensCount {
 		recordsInfos, _ := idx.GetOrInsert(token, hashmap.New[string, RecordInfo]())
 		recordsInfos.Insert(id, RecordInfo{count})
@@ -215,7 +214,6 @@ func (idx *MemIndex) Add(id string, text string) {
 
 func (idx *MemIndex) Remove(id string, text string) {
 	tokens := lib.Tokenize(text)
-
 	for _, token := range tokens {
 		if recordsInfos, ok := idx.Get(token); ok {
 			recordsInfos.Del(id)
@@ -224,30 +222,30 @@ func (idx *MemIndex) Remove(id string, text string) {
 }
 
 func (idx *MemIndex) Find(params FindParams) []string {
-	tokens := lib.Tokenize(params.Query)
-	recordsIds := make(map[string]int)
-	docIds := make([]string, 0)
+	recordIds := make(map[string]int)
+	resultIds := make([]string, 0)
 
+	tokens := lib.Tokenize(params.Query)
 	for _, token := range tokens {
 		if infos, ok := idx.Get(token); ok {
 			infos.Range(func(id string, info RecordInfo) bool {
-				recordsIds[id] += 1
+				recordIds[id] += 1
 				return true
 			})
 		}
 	}
 
-	for id, tokensCount := range recordsIds {
+	for id, tokensCount := range recordIds {
 		if (params.BoolMode == AND && tokensCount == len(tokens)) ||
 			params.BoolMode == OR {
-			docIds = append(docIds, id)
+			resultIds = append(resultIds, id)
 		}
 	}
 
-	return docIds
+	return resultIds
 }
 
-func schemaToFlatMap(obj any, prefix ...string) map[string]string {
+func flattenSchema(obj any, prefix ...string) map[string]string {
 	m := make(map[string]string)
 	t := reflect.TypeOf(obj)
 	v := reflect.ValueOf(obj)
@@ -260,7 +258,7 @@ func schemaToFlatMap(obj any, prefix ...string) map[string]string {
 			}
 
 			if field.Type.Kind() == reflect.Struct {
-				for key, value := range schemaToFlatMap(v.Field(i).Interface(), propName) {
+				for key, value := range flattenSchema(v.Field(i).Interface(), propName) {
 					m[key] = value
 				}
 			} else {

@@ -38,6 +38,8 @@ var testData = []User{
 	{"name_10", "email_10@email.com", "2023-02-10T15:04:14Z07:00"},
 }
 
+var benchmarkData = make([]User, 10000)
+
 func TestInsert(t *testing.T) {
 	db := New[User]()
 	data := testData[0]
@@ -59,7 +61,7 @@ func TestInsert(t *testing.T) {
 func TestInsertBatch(t *testing.T) {
 	db := New[User]()
 
-	errs := db.InsertBatch(testData, 2)
+	errs := db.InsertBatch(testData, 3)
 	numInserted := len(testData) - len(errs)
 
 	assert.Equal(t, numInserted, db.docs.Len())
@@ -98,12 +100,11 @@ func TestSearch(t *testing.T) {
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
 			db := New[User]()
-			_ = db.InsertBatch(testData, 2)
+			_ = db.InsertBatch(testData, 10)
 
 			actual := db.Search(c.given)
 
 			assert.Equal(t, len(c.expected), len(actual))
-
 			for i := range c.expected {
 				assert.Equal(t, c.expected[i], actual[i].S)
 			}
@@ -111,7 +112,7 @@ func TestSearch(t *testing.T) {
 	}
 }
 
-func TestSchemaToFlatMap(t *testing.T) {
+func TestFlattenSchema(t *testing.T) {
 	cases := []TestCase[any, map[string]string]{
 		{
 			given: User{
@@ -145,8 +146,26 @@ func TestSchemaToFlatMap(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
-			actual := schemaToFlatMap(c.given)
+			actual := flattenSchema(c.given)
 			assert.Equal(t, c.expected, actual)
 		})
+	}
+}
+
+func BenchmarkInsert(b *testing.B) {
+	db := New[User]()
+
+	for i := 0; i < b.N; i++ {
+		for _, data := range benchmarkData {
+			_, _ = db.Insert(data)
+		}
+	}
+}
+
+func BenchmarkInsertBatch(b *testing.B) {
+	db := New[User]()
+
+	for i := 0; i < b.N; i++ {
+		_ = db.InsertBatch(benchmarkData, 1000)
 	}
 }

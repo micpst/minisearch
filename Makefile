@@ -45,6 +45,10 @@ coverage:
 	@go test -v -race -cover -covermode=atomic -coverprofile=$(COVERAGE_PROFILE) ./...
 	@go tool cover -func $(COVERAGE_PROFILE)
 
+# Benchmark:
+bench:
+	@go test -bench=. -run=^a -benchtime=5x ./...
+
 # Lint
 lint:
 	@golangci-lint run --timeout=3m
@@ -68,6 +72,9 @@ docker-check:
 
 docker-test:
 	@docker exec $(DOCKER_IMAGE_DEV) make test
+
+docker-bench:
+	@docker exec $(DOCKER_IMAGE_DEV) make bench
 
 # Docker prod:
 docker-build:
