@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/cornelk/hashmap"
 	"github.com/google/uuid"
 	"github.com/micpst/fts-engine/pkg/lib"
 )
@@ -18,11 +17,32 @@ type Record[Schema SchemaProps] struct {
 	S  Schema
 }
 
-type RecordInfo struct {
-	freq uint32
+type Mode string
+
+type SearchParams struct {
+	Query      string
+	Properties []string
+	BoolMode   Mode
 }
 
-type Mode string
+type findParams struct {
+	query    string
+	boolMode Mode
+}
+
+type recordInfo struct {
+	freq float64
+}
+
+type memIndex struct {
+	index map[string]map[string]recordInfo
+}
+
+type MemDB[Schema SchemaProps] struct {
+	mutex   sync.RWMutex
+	docs    map[string]Schema
+	indexes map[string]*memIndex
+}
 
 const (
 	AND Mode = "AND"
@@ -31,30 +51,10 @@ const (
 
 const WILDCARD = "*"
 
-type SearchParams struct {
-	Query      string
-	Properties []string
-	BoolMode   Mode
-}
-
-type FindParams struct {
-	Query    string
-	BoolMode Mode
-}
-
-type MemIndex struct {
-	*hashmap.Map[string, *hashmap.Map[string, RecordInfo]]
-}
-
-type MemDB[Schema SchemaProps] struct {
-	docs    *hashmap.Map[string, Schema]
-	indexes *hashmap.Map[string, *MemIndex]
-}
-
 func New[Schema SchemaProps]() *MemDB[Schema] {
 	db := &MemDB[Schema]{
-		docs:    hashmap.New[string, Schema](),
-		indexes: hashmap.New[string, *MemIndex](),
+		docs:    make(map[string]Schema),
+		indexes: make(map[string]*memIndex),
 	}
 	db.buildIndexes()
 	return db
@@ -63,47 +63,51 @@ func New[Schema SchemaProps]() *MemDB[Schema] {
 func (db *MemDB[Schema]) buildIndexes() {
 	var s Schema
 	for key := range flattenSchema(s) {
-		db.indexes.Set(key, NewIndex())
+		db.indexes[key] = newIndex()
 	}
 }
 
 func (db *MemDB[Schema]) Insert(doc Schema) (Record[Schema], error) {
 	id := uuid.NewString()
-	if ok := db.docs.Insert(id, doc); !ok {
-		return Record[Schema]{}, fmt.Errorf("document cannot be created")
-	}
-
 	docMap := flattenSchema(doc)
 
-	db.indexes.Range(func(propName string, index *MemIndex) bool {
-		index.Add(id, docMap[propName])
-		return true
-	})
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	if _, ok := db.docs[id]; ok {
+		return Record[Schema]{}, fmt.Errorf("document id already exists")
+	}
+
+	db.docs[id] = doc
+
+	for propName, index := range db.indexes {
+		index.add(id, docMap[propName])
+	}
 
 	return Record[Schema]{Id: id, S: doc}, nil
 }
 
 func (db *MemDB[Schema]) InsertBatch(docs []Schema, batchSize int) []error {
-	in := make(chan Schema)
-	out := make(chan error)
-	n := int(math.Ceil(float64(len(docs)) / float64(batchSize)))
+	batchCount := int(math.Ceil(float64(len(docs)) / float64(batchSize)))
+	docsChan := make(chan Schema)
+	errsChan := make(chan error)
 
 	var wg sync.WaitGroup
-	wg.Add(n)
+	wg.Add(batchCount)
 
 	go func() {
-		for _, d := range docs {
-			in <- d
+		for _, doc := range docs {
+			docsChan <- doc
 		}
-		close(in)
+		close(docsChan)
 	}()
 
-	for i := 0; i < n; i++ {
+	for i := 0; i < batchCount; i++ {
 		go func() {
 			defer wg.Done()
-			for d := range in {
-				if _, err := db.Insert(d); err != nil {
-					out <- err
+			for doc := range docsChan {
+				if _, err := db.Insert(doc); err != nil {
+					errsChan <- err
 				}
 			}
 		}()
@@ -111,11 +115,11 @@ func (db *MemDB[Schema]) InsertBatch(docs []Schema, batchSize int) []error {
 
 	go func() {
 		wg.Wait()
-		close(out)
+		close(errsChan)
 	}()
 
 	errs := make([]error, 0)
-	for err := range out {
+	for err := range errsChan {
 		errs = append(errs, err)
 	}
 
@@ -123,43 +127,42 @@ func (db *MemDB[Schema]) InsertBatch(docs []Schema, batchSize int) []error {
 }
 
 func (db *MemDB[Schema]) Update(id string, doc Schema) (Record[Schema], error) {
-	prevDoc, ok := db.docs.Get(id)
+	docMap := flattenSchema(doc)
+
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	prevDoc, ok := db.docs[id]
 	if !ok {
 		return Record[Schema]{}, fmt.Errorf("document not found")
 	}
-
-	docMap := flattenSchema(doc)
 	prevDocMap := flattenSchema(prevDoc)
 
-	db.indexes.Range(func(propName string, index *MemIndex) bool {
-		index.Remove(id, prevDocMap[propName])
-		return true
-	})
+	for propName, index := range db.indexes {
+		index.remove(id, prevDocMap[propName])
+		index.add(id, docMap[propName])
+	}
 
-	db.docs.Set(id, doc)
-
-	db.indexes.Range(func(propName string, index *MemIndex) bool {
-		index.Add(id, docMap[propName])
-		return true
-	})
+	db.docs[id] = doc
 
 	return Record[Schema]{Id: id, S: doc}, nil
 }
 
 func (db *MemDB[Schema]) Delete(id string) error {
-	doc, ok := db.docs.Get(id)
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+
+	doc, ok := db.docs[id]
 	if !ok {
 		return fmt.Errorf("document not found")
 	}
-
 	docMap := flattenSchema(doc)
 
-	db.indexes.Range(func(propName string, index *MemIndex) bool {
-		index.Remove(id, docMap[propName])
-		return true
-	})
+	for propName, index := range db.indexes {
+		index.remove(id, docMap[propName])
+	}
 
-	db.docs.Del(id)
+	delete(db.docs, id)
 
 	return nil
 }
@@ -169,7 +172,10 @@ func (db *MemDB[Schema]) Search(params SearchParams) []Record[Schema] {
 	records := make([]Record[Schema], 0)
 	props := params.Properties
 
-	if len(params.Properties) == 1 && params.Properties[0] == WILDCARD {
+	db.mutex.RLock()
+	defer db.mutex.RUnlock()
+
+	if len(props) == 1 && props[0] == WILDCARD {
 		props = make([]string, 0)
 		var s Schema
 		for key := range flattenSchema(s) {
@@ -178,10 +184,10 @@ func (db *MemDB[Schema]) Search(params SearchParams) []Record[Schema] {
 	}
 
 	for _, prop := range props {
-		if index, ok := db.indexes.Get(prop); ok {
-			ids := index.Find(FindParams{
-				Query:    params.Query,
-				BoolMode: params.BoolMode,
+		if index, ok := db.indexes[prop]; ok {
+			ids := index.find(findParams{
+				query:    params.Query,
+				boolMode: params.BoolMode,
 			})
 			for _, id := range ids {
 				recordsIds[id] = struct{}{}
@@ -190,54 +196,62 @@ func (db *MemDB[Schema]) Search(params SearchParams) []Record[Schema] {
 	}
 
 	for id := range recordsIds {
-		doc, _ := db.docs.Get(id)
-		records = append(records, Record[Schema]{Id: id, S: doc})
+		if doc, ok := db.docs[id]; ok {
+			records = append(records, Record[Schema]{Id: id, S: doc})
+		}
 	}
 
 	return records
 }
 
-func NewIndex() *MemIndex {
-	return &MemIndex{
-		hashmap.New[string, *hashmap.Map[string, RecordInfo]](),
+func newIndex() *memIndex {
+	return &memIndex{
+		index: make(map[string]map[string]recordInfo),
 	}
 }
 
-func (idx *MemIndex) Add(id string, text string) {
+func (idx *memIndex) add(id string, text string) {
 	tokens := lib.Tokenize(text)
 	tokensCount := lib.Count(tokens)
+
 	for token, count := range tokensCount {
-		recordsInfos, _ := idx.GetOrInsert(token, hashmap.New[string, RecordInfo]())
-		recordsInfos.Insert(id, RecordInfo{count})
+		if _, ok := idx.index[token]; !ok {
+			idx.index[token] = make(map[string]recordInfo)
+		}
+		info := recordInfo{
+			freq: float64(count) / float64(len(tokens)),
+		}
+		idx.index[token][id] = info
 	}
 }
 
-func (idx *MemIndex) Remove(id string, text string) {
+func (idx *memIndex) remove(id string, text string) {
 	tokens := lib.Tokenize(text)
+
 	for _, token := range tokens {
-		if recordsInfos, ok := idx.Get(token); ok {
-			recordsInfos.Del(id)
+		if _, ok := idx.index[token]; ok {
+			delete(idx.index[token], id)
 		}
 	}
 }
 
-func (idx *MemIndex) Find(params FindParams) []string {
-	recordIds := make(map[string]int)
+func (idx *memIndex) find(params findParams) []string {
 	resultIds := make([]string, 0)
+	recordIds := make(map[string]int)
 
-	tokens := lib.Tokenize(params.Query)
+	tokens := lib.Tokenize(params.query)
+
 	for _, token := range tokens {
-		if infos, ok := idx.Get(token); ok {
-			infos.Range(func(id string, info RecordInfo) bool {
+		if infos, ok := idx.index[token]; ok {
+			for id := range infos {
 				recordIds[id] += 1
-				return true
-			})
+			}
 		}
 	}
 
 	for id, tokensCount := range recordIds {
-		if (params.BoolMode == AND && tokensCount == len(tokens)) ||
-			params.BoolMode == OR {
+		if (params.boolMode == AND && tokensCount == len(tokens)) ||
+			params.boolMode == OR {
 			resultIds = append(resultIds, id)
 		}
 	}

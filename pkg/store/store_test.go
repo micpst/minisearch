@@ -38,7 +38,7 @@ var testData = []User{
 	{"name_10", "email_10@email.com", "2023-02-10T15:04:14Z07:00"},
 }
 
-var benchmarkData = make([]User, 10000)
+var benchmarkData = make([]User, 100000)
 
 func TestInsert(t *testing.T) {
 	db := New[User]()
@@ -49,13 +49,12 @@ func TestInsert(t *testing.T) {
 	assert.NotEmpty(t, v.Id)
 	assert.Equal(t, data, v.S)
 
-	assert.Equal(t, 1, db.docs.Len())
-	assert.Equal(t, 2, db.indexes.Len())
+	assert.Equal(t, 1, len(db.docs))
+	assert.Equal(t, 2, len(db.indexes))
 
-	db.indexes.Range(func(propName string, index *MemIndex) bool {
-		assert.Equal(t, 1, index.Len())
-		return true
-	})
+	for _, index := range db.indexes {
+		assert.Equal(t, 1, len(index.index))
+	}
 }
 
 func TestInsertBatch(t *testing.T) {
@@ -64,13 +63,12 @@ func TestInsertBatch(t *testing.T) {
 	errs := db.InsertBatch(testData, 3)
 	numInserted := len(testData) - len(errs)
 
-	assert.Equal(t, numInserted, db.docs.Len())
-	assert.Equal(t, 2, db.indexes.Len())
+	assert.Equal(t, numInserted, len(db.docs))
+	assert.Equal(t, 2, len(db.indexes))
 
-	db.indexes.Range(func(propName string, index *MemIndex) bool {
-		assert.Equal(t, numInserted, index.Len())
-		return true
-	})
+	for _, index := range db.indexes {
+		assert.Equal(t, numInserted, len(index.index))
+	}
 }
 
 func TestSearch(t *testing.T) {
@@ -100,7 +98,7 @@ func TestSearch(t *testing.T) {
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
 			db := New[User]()
-			_ = db.InsertBatch(testData, 10)
+			db.InsertBatch(testData, 10)
 
 			actual := db.Search(c.given)
 
@@ -166,6 +164,6 @@ func BenchmarkInsertBatch(b *testing.B) {
 	db := New[User]()
 
 	for i := 0; i < b.N; i++ {
-		_ = db.InsertBatch(benchmarkData, 1000)
+		db.InsertBatch(benchmarkData, 1000)
 	}
 }
