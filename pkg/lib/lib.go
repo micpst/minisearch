@@ -13,8 +13,8 @@ func Tokenize(data string) []string {
 	return strings.Fields(data)
 }
 
-func Count(tokens []string) map[string]uint32 {
-	dict := make(map[string]uint32)
+func Count(tokens []string) map[string]int {
+	dict := make(map[string]int)
 	for _, token := range tokens {
 		dict[token]++
 	}

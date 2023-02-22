@@ -27,7 +27,6 @@ func TestTokenize(t *testing.T) {
 			expected: []string{"lorem", "ipsum", "dolor", "sit", "amet"},
 		},
 	}
-
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("'%v'", c.given), func(t *testing.T) {
 			actual := Tokenize(c.given)
@@ -37,21 +36,20 @@ func TestTokenize(t *testing.T) {
 }
 
 func TestCountTokens(t *testing.T) {
-	cases := []TestCase[[]string, map[string]uint32]{
+	cases := []TestCase[[]string, map[string]int]{
 		{
 			given:    []string{},
-			expected: map[string]uint32{},
+			expected: map[string]int{},
 		},
 		{
 			given:    []string{"hello", "world"},
-			expected: map[string]uint32{"world": 1, "hello": 1},
+			expected: map[string]int{"world": 1, "hello": 1},
 		},
 		{
 			given:    []string{"this", "is", "duplicated", "duplicated", "is"},
-			expected: map[string]uint32{"duplicated": 2, "is": 2, "this": 1},
+			expected: map[string]int{"duplicated": 2, "is": 2, "this": 1},
 		},
 	}
-
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
 			actual := Count(c.given)
