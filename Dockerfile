@@ -1,12 +1,12 @@
 # syntax = docker/dockerfile:1
-FROM golang:1.19-buster AS base
+FROM golang:1.20-buster AS base
 WORKDIR /app
 COPY go.mod .
 COPY go.sum .
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
-FROM golangci/golangci-lint:v1.50.1 AS dev
+FROM golangci/golangci-lint:v1.51 AS dev
 WORKDIR /app
 COPY --from=base /go/pkg/mod /go/pkg/mod
 ENTRYPOINT ["tail", "-f", "/dev/null"]

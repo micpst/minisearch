@@ -4,7 +4,8 @@ BINARY_PATH=$(BINARY_DIR)/$(BINARY_NAME)
 RELEASE_NAME=fts-engine
 COVERAGE_PROFILE=cover.out
 DOCKER_IMAGE=fts-engine
-DOCKER_IMAGE_DEV=fts-engine-dev
+DOCKER_IMAGE_DEV=$(DOCKER_IMAGE)-dev
+DOCKER_IMAGE_WATCH=$(DOCKER_IMAGE)-watch
 DOCKER_PORT=3000
 WATCH_PORT=3001
 
@@ -33,6 +34,7 @@ watch:
 		-w /go/src/$(PACKAGE_NAME) \
 		-v $(shell pwd):/go/src/$(PACKAGE_NAME) \
 		-p $(WATCH_PORT):$(WATCH_PORT) \
+		--name $(DOCKER_IMAGE_WATCH) \
 		cosmtrek/air \
 		--build.cmd "go build -race -o $(BINARY_PATH) ./cmd/server" \
 		--build.bin "./$(BINARY_PATH) -p $(WATCH_PORT)"
@@ -62,7 +64,7 @@ release:
 # Docker dev:
 docker-dev-setup:
 	@docker build -t $(DOCKER_IMAGE_DEV) --target dev .
-	@docker run --rm --name $(DOCKER_IMAGE_DEV) -v $(shell pwd):/app $(DOCKER_IMAGE_DEV)
+	@docker run --rm --name $(DOCKER_IMAGE_DEV) -d -v $(shell pwd):/app $(DOCKER_IMAGE_DEV)
 
 docker-dev-stop:
 	@docker stop $(DOCKER_IMAGE_DEV)
