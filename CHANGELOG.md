@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.1] 2023-02-24
+
+### Changed:
+- Bump go version to 1.20
+- Update dependencies
+- Improve overall performance
+
+### Removed:
+- Remove `github.com/cornelk/hashmap` dependency
+
 ## [1.0.0] 2023-02-13
 
 ### Added:
