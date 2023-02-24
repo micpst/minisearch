@@ -47,7 +47,7 @@ func TestInsert(t *testing.T) {
 	v, _ := db.Insert(data)
 
 	assert.NotEmpty(t, v.Id)
-	assert.Equal(t, data, v.S)
+	assert.Equal(t, data, v.Data)
 
 	assert.Equal(t, 1, len(db.docs))
 	assert.Equal(t, 2, len(db.indexes))
@@ -104,7 +104,7 @@ func TestSearch(t *testing.T) {
 
 			assert.Equal(t, len(c.expected), len(actual))
 			for i := range c.expected {
-				assert.Equal(t, c.expected[i], actual[i].S)
+				assert.Equal(t, c.expected[i], actual[i].Data)
 			}
 		})
 	}

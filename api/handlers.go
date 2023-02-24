@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/gin-gonic/gin"
 	"github.com/micpst/fts-engine/pkg/store"
@@ -18,10 +19,16 @@ type DocumentResponse struct {
 	Abstract string `json:"abstract"`
 }
 
-type SearchDocumentsResponse struct {
-	Count   int                `json:"count"`
-	Hits    []DocumentResponse `json:"hits"`
-	Elapsed int64              `json:"elapsed"`
+type SearchDocument struct {
+	Id    string   `json:"id"`
+	Data  Document `json:"data"`
+	Score float64  `json:"score"`
+}
+
+type SearchDocumentResponse struct {
+	Count   int              `json:"count"`
+	Hits    []SearchDocument `json:"hits"`
+	Elapsed int64            `json:"elapsed"`
 }
 
 type UploadDocumentsResponse struct {
@@ -144,9 +151,9 @@ func (s *Server) searchDocuments(c *gin.Context) {
 	})
 	elapsed := time.Since(start)
 
-	c.JSON(http.StatusOK, SearchDocumentsResponse{
+	c.JSON(http.StatusOK, SearchDocumentResponse{
 		Count:   len(docs),
-		Hits:    documentListFromRecords(docs),
+		Hits:    *(*[]SearchDocument)(unsafe.Pointer(&docs)),
 		Elapsed: elapsed.Microseconds(),
 	})
 }
@@ -154,17 +161,8 @@ func (s *Server) searchDocuments(c *gin.Context) {
 func documentFromRecord(d store.Record[Document]) DocumentResponse {
 	return DocumentResponse{
 		Id:       d.Id,
-		Title:    d.S.Title,
-		Url:      d.S.Url,
-		Abstract: d.S.Abstract,
+		Title:    d.Data.Title,
+		Url:      d.Data.Url,
+		Abstract: d.Data.Abstract,
 	}
-}
-
-func documentListFromRecords(docs []store.Record[Document]) []DocumentResponse {
-	results := make([]DocumentResponse, 0)
-	for _, d := range docs {
-		doc := documentFromRecord(d)
-		results = append(results, doc)
-	}
-	return results
 }
