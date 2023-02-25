@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"math"
 	"regexp"
 	"strings"
 )
@@ -19,4 +20,9 @@ func Count(tokens []string) map[string]int {
 		dict[token]++
 	}
 	return dict
+}
+
+func TfIdf(tf float64, matchingDocsCount int, docsCount int) float64 {
+	idf := math.Log(1 + (float64(docsCount-matchingDocsCount)+0.5)/(float64(matchingDocsCount)+0.5))
+	return tf * idf
 }

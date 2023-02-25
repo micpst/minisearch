@@ -12,6 +12,12 @@ type TestCase[Given any, Expected any] struct {
 	expected Expected
 }
 
+type TfIdfInput struct {
+	termFrequency          float64
+	documentsCount         int
+	matchingDocumentsCount int
+}
+
 func TestTokenize(t *testing.T) {
 	cases := []TestCase[string, []string]{
 		{
@@ -53,6 +59,41 @@ func TestCountTokens(t *testing.T) {
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
 			actual := Count(c.given)
+			assert.Equal(t, c.expected, actual)
+		})
+	}
+}
+
+func TestTfIdf(t *testing.T) {
+	cases := []TestCase[TfIdfInput, float64]{
+		{
+			given: TfIdfInput{
+				termFrequency:          1,
+				documentsCount:         1,
+				matchingDocumentsCount: 1,
+			},
+			expected: 0.2876820724517809,
+		},
+		{
+			given: TfIdfInput{
+				termFrequency:          0.5,
+				documentsCount:         1,
+				matchingDocumentsCount: 1,
+			},
+			expected: 0.14384103622589045,
+		},
+		{
+			given: TfIdfInput{
+				termFrequency:          1,
+				documentsCount:         3,
+				matchingDocumentsCount: 1,
+			},
+			expected: 0.9808292530117264,
+		},
+	}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
+			actual := TfIdf(c.given.termFrequency, c.given.matchingDocumentsCount, c.given.documentsCount)
 			assert.Equal(t, c.expected, actual)
 		})
 	}
