@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/micpst/fts-engine/pkg/lib"
+	"github.com/micpst/minisearch/pkg/lib"
 )
 
 type SchemaProps any
