@@ -140,17 +140,22 @@ func TestSearch(t *testing.T) {
 	db := New[User]()
 	db.InsertBatch(testData, len(testData))
 
-	cases := []TestCase[SearchParams, []SearchResult[User]]{
+	cases := []TestCase[SearchParams, SearchResult[User]]{
 		{
 			given: SearchParams{
 				Query:      "charlie davis",
 				Properties: []string{"name"},
 				BoolMode:   AND,
+				Offset:     0,
+				Limit:      10,
 			},
-			expected: []SearchResult[User]{
-				{
-					Data:  testData[3],
-					Score: 1.7370173528072108,
+			expected: SearchResult[User]{
+				Count: 1,
+				Hits: []SearchHit[User]{
+					{
+						Data:  testData[3],
+						Score: 1.7370173528072108,
+					},
 				},
 			},
 		},
@@ -159,15 +164,20 @@ func TestSearch(t *testing.T) {
 				Query:      "julia tom@email.com",
 				Properties: []string{"name", "email"},
 				BoolMode:   OR,
+				Offset:     0,
+				Limit:      10,
 			},
-			expected: []SearchResult[User]{
-				{
-					Data:  testData[0],
-					Score: 1.992430164690206,
-				},
-				{
-					Data:  testData[6],
-					Score: 0.996215082345103,
+			expected: SearchResult[User]{
+				Count: 2,
+				Hits: []SearchHit[User]{
+					{
+						Data:  testData[0],
+						Score: 1.992430164690206,
+					},
+					{
+						Data:  testData[6],
+						Score: 0.996215082345103,
+					},
 				},
 			},
 		},
@@ -176,11 +186,11 @@ func TestSearch(t *testing.T) {
 		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
 			actual := db.Search(c.given)
 
-			assert.Equal(t, len(c.expected), len(actual))
+			assert.Equal(t, c.expected.Count, actual.Count)
 
-			for i := range c.expected {
-				assert.Equal(t, c.expected[i].Data, actual[i].Data)
-				assert.Equal(t, c.expected[i].Score, actual[i].Score)
+			for i, hit := range c.expected.Hits {
+				assert.Equal(t, hit.Data, actual.Hits[i].Data)
+				assert.Equal(t, hit.Score, actual.Hits[i].Score)
 			}
 		})
 	}

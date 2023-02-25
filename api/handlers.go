@@ -41,6 +41,8 @@ type SearchDocumentsParams struct {
 	Query      string     `form:"query" binding:"required"`
 	Properties string     `form:"properties"`
 	BoolMode   store.Mode `form:"bool_mode"`
+	Offset     int        `form:"offset"`
+	Limit      int        `form:"limit"`
 }
 
 type UploadDocumentsFileDump struct {
@@ -138,22 +140,26 @@ func (s *Server) searchDocuments(c *gin.Context) {
 	params := SearchDocumentsParams{
 		Properties: store.WILDCARD,
 		BoolMode:   store.AND,
+		Offset:     0,
+		Limit:      10,
 	}
 	if err := c.Bind(&params); err != nil {
 		return
 	}
 
 	start := time.Now()
-	docs := s.db.Search(store.SearchParams{
+	result := s.db.Search(store.SearchParams{
 		Query:      params.Query,
 		Properties: strings.Split(params.Properties, ","),
 		BoolMode:   params.BoolMode,
+		Offset:     params.Offset,
+		Limit:      params.Limit,
 	})
 	elapsed := time.Since(start)
 
 	c.JSON(http.StatusOK, SearchDocumentResponse{
-		Count:   len(docs),
-		Hits:    *(*[]SearchDocument)(unsafe.Pointer(&docs)),
+		Count:   result.Count,
+		Hits:    *(*[]SearchDocument)(unsafe.Pointer(&result.Hits)),
 		Elapsed: elapsed.Microseconds(),
 	})
 }
