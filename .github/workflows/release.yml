@@ -58,8 +58,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_name: fts-engine-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
-          asset_path: ./fts-engine.tar.gz
+          asset_name: minisearch-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+          asset_path: ./minisearch.tar.gz
           asset_content_type: application/gzip
 
   push_image:

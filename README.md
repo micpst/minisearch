@@ -1,6 +1,6 @@
-# FTS Engine
+# MiniSearch
 
-[![build](https://github.com/micpst/fts-engine/actions/workflows/build.yml/badge.svg)](https://github.com/micpst/fts-engine/actions/workflows/build.yml)
+[![build](https://github.com/micpst/minisearch/actions/workflows/build.yml/badge.svg)](https://github.com/micpst/minisearch/actions/workflows/build.yml)
 
 Restful, in-memory, full-text search engine written in Go.
 
@@ -9,7 +9,7 @@ Restful, in-memory, full-text search engine written in Go.
 - [x] Full-text indexing of multiple fields in a document
 - [x] Boolean queries with AND, OR operators between subqueries
 - [ ] Exact phrase search
-- [ ] Document ranking based on TF-IDF
+- [x] Document ranking based on TF-IDF
 - [ ] Vector similarity search for semantic search
 - [ ] Stemming-based query expansion for many languages
 - [x] Document deletion and updating with index garbage collection
@@ -17,21 +17,21 @@ Restful, in-memory, full-text search engine written in Go.
 ## 🛠️ Installation
 
 ### Download binary
-To download and run fts-engine from a precompiled binary:
-1. Download a precompiled version of fts-engine from GitHub.
+To download and run minisearch from a precompiled binary:
+1. Download a precompiled version of minisearch from GitHub.
 2. Run the server binary:
 ```bash
 $ ./server
 ```
 
 ### Run with Docker
-To run fts-engine with Docker, use the **fts-engine** Docker image:
+To run minisearch with Docker, use the **minisearch** Docker image:
 ```bash
-$ docker run -d --name fts-engine -p 3000:3000 micpst/fts-engine:latest
+$ docker run -d --name minisearch -p 3000:3000 micpst/minisearch:latest
 ```
 
 ### Build from source
-To build and run fts-engine from the source code:
+To build and run minisearch from the source code:
 1. Requirements: **go & make**
 2. Install dependencies:
 ```bash

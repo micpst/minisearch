@@ -1,4 +1,4 @@
-module github.com/micpst/fts-engine
+module github.com/micpst/minisearch
 
 go 1.20
 

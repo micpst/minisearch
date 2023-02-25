@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
-	"github.com/micpst/fts-engine/pkg/store"
+	"github.com/micpst/minisearch/pkg/store"
 )
 
 type Config struct {

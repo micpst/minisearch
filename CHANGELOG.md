@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0] 2023-02-26
+
+### Added:
+- Add search results ranking based on TF-IDF
+- Add results pagination
+
+### Changed:
+- Rename project to `minisearch`
+
 ## [1.0.1] 2023-02-24
 
 ### Changed:

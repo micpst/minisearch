@@ -4,7 +4,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/micpst/fts-engine/api"
+	"github.com/micpst/minisearch/api"
 )
 
 func main() {
