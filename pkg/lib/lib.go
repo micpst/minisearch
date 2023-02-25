@@ -26,3 +26,16 @@ func TfIdf(tf float64, matchingDocsCount int, docsCount int) float64 {
 	idf := math.Log(1 + (float64(docsCount-matchingDocsCount)+0.5)/(float64(matchingDocsCount)+0.5))
 	return tf * idf
 }
+
+func Paginate(offset int, limit int, sliceLength int) (int, int) {
+	if offset > sliceLength {
+		offset = sliceLength
+	}
+
+	end := offset + limit
+	if end > sliceLength {
+		end = sliceLength
+	}
+
+	return offset, end
+}

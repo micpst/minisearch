@@ -24,25 +24,32 @@ type SearchParams struct {
 	Query      string
 	Properties []string
 	BoolMode   Mode
+	Offset     int
+	Limit      int
 }
 
 type SearchResult[Schema SchemaProps] struct {
+	Hits  SearchHits[Schema]
+	Count int
+}
+
+type SearchHit[Schema SchemaProps] struct {
 	Id    string
 	Data  Schema
 	Score float64
 }
 
-type SearchResults[Schema SchemaProps] []SearchResult[Schema]
+type SearchHits[Schema SchemaProps] []SearchHit[Schema]
 
-func (r SearchResults[Schema]) Len() int {
+func (r SearchHits[Schema]) Len() int {
 	return len(r)
 }
 
-func (r SearchResults[Schema]) Less(i, j int) bool {
+func (r SearchHits[Schema]) Less(i, j int) bool {
 	return r[i].Score > r[j].Score
 }
 
-func (r SearchResults[Schema]) Swap(i, j int) {
+func (r SearchHits[Schema]) Swap(i, j int) {
 	r[i], r[j] = r[j], r[i]
 }
 
@@ -190,9 +197,9 @@ func (db *MemDB[Schema]) Delete(id string) error {
 	return nil
 }
 
-func (db *MemDB[Schema]) Search(params SearchParams) []SearchResult[Schema] {
+func (db *MemDB[Schema]) Search(params SearchParams) SearchResult[Schema] {
 	resultIdScores := make(map[string]float64)
-	results := make(SearchResults[Schema], 0)
+	results := make(SearchHits[Schema], 0)
 	props := params.Properties
 
 	db.mutex.RLock()
@@ -220,7 +227,7 @@ func (db *MemDB[Schema]) Search(params SearchParams) []SearchResult[Schema] {
 
 	for id, score := range resultIdScores {
 		if doc, ok := db.docs[id]; ok {
-			results = append(results, SearchResult[Schema]{
+			results = append(results, SearchHit[Schema]{
 				Id:    id,
 				Data:  doc,
 				Score: score,
@@ -230,7 +237,12 @@ func (db *MemDB[Schema]) Search(params SearchParams) []SearchResult[Schema] {
 
 	sort.Sort(results)
 
-	return results
+	start, stop := lib.Paginate(params.Offset, params.Limit, len(results))
+
+	return SearchResult[Schema]{
+		Hits:  results[start:stop],
+		Count: len(results),
+	}
 }
 
 func newIndex() *memIndex {
@@ -243,7 +255,7 @@ func newIndex() *memIndex {
 func (idx *memIndex) add(id string, text string) {
 	tokens := lib.Tokenize(text)
 	tokensCount := lib.Count(tokens)
-	
+
 	for token, count := range tokensCount {
 		if _, ok := idx.index[token]; !ok {
 			idx.index[token] = make(map[string]recordInfo)
