@@ -34,6 +34,18 @@ type SearchResult[Schema SchemaProps] struct {
 
 type SearchResults[Schema SchemaProps] []SearchResult[Schema]
 
+func (r SearchResults[Schema]) Len() int {
+	return len(r)
+}
+
+func (r SearchResults[Schema]) Less(i, j int) bool {
+	return r[i].Score > r[j].Score
+}
+
+func (r SearchResults[Schema]) Swap(i, j int) {
+	r[i], r[j] = r[j], r[i]
+}
+
 type findParams struct {
 	query    string
 	boolMode Mode
@@ -221,18 +233,6 @@ func (db *MemDB[Schema]) Search(params SearchParams) []SearchResult[Schema] {
 	return results
 }
 
-func (r SearchResults[Schema]) Len() int {
-	return len(r)
-}
-
-func (r SearchResults[Schema]) Less(i, j int) bool {
-	return r[i].Score > r[j].Score
-}
-
-func (r SearchResults[Schema]) Swap(i, j int) {
-	r[i], r[j] = r[j], r[i]
-}
-
 func newIndex() *memIndex {
 	return &memIndex{
 		index:       make(map[string]map[string]recordInfo),
@@ -243,7 +243,7 @@ func newIndex() *memIndex {
 func (idx *memIndex) add(id string, text string) {
 	tokens := lib.Tokenize(text)
 	tokensCount := lib.Count(tokens)
-
+	
 	for token, count := range tokensCount {
 		if _, ok := idx.index[token]; !ok {
 			idx.index[token] = make(map[string]recordInfo)
