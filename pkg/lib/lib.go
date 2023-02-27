@@ -15,11 +15,11 @@ func Tokenize(data string) []string {
 }
 
 func Count(tokens []string) map[string]int {
-	dict := make(map[string]int)
+	tokensCounter := make(map[string]int, len(tokens))
 	for _, token := range tokens {
-		dict[token]++
+		tokensCounter[token]++
 	}
-	return dict
+	return tokensCounter
 }
 
 func TfIdf(tf float64, matchingDocsCount int, docsCount int) float64 {

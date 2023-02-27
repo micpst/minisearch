@@ -13,18 +13,18 @@ type Config struct {
 }
 
 type Server struct {
-	cfg    *Config
+	config *Config
 	db     *store.MemDB[Document]
 	router *gin.Engine
 }
 
-func New(cfg *Config) *Server {
+func New(c *Config) *Server {
 	s := &Server{
-		cfg:    cfg,
+		config: c,
 		db:     store.New[Document](),
 		router: gin.Default(),
 	}
-	s.router.MaxMultipartMemory = s.cfg.MaxMultipartMemory
+	s.router.MaxMultipartMemory = s.config.MaxMultipartMemory
 	s.initRoutes()
 	return s
 }
@@ -38,5 +38,5 @@ func (s *Server) initRoutes() {
 }
 
 func (s *Server) Run() error {
-	return s.router.Run(fmt.Sprintf(":%d", s.cfg.Port))
+	return s.router.Run(fmt.Sprintf(":%d", s.config.Port))
 }

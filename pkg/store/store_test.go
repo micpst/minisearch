@@ -15,7 +15,6 @@ type TestCase[Given any, Expected any] struct {
 type IndexState struct {
 	length      int
 	occurrences int
-	docsCount   int
 }
 
 type User struct {
@@ -54,12 +53,10 @@ func TestInsert(t *testing.T) {
 				"name": {
 					length:      2,
 					occurrences: 2,
-					docsCount:   1,
 				},
 				"email": {
 					length:      1,
 					occurrences: 1,
-					docsCount:   1,
 				},
 			},
 		},
@@ -69,12 +66,10 @@ func TestInsert(t *testing.T) {
 				"name": {
 					length:      1,
 					occurrences: 1,
-					docsCount:   1,
 				},
 				"email": {
 					length:      1,
 					occurrences: 1,
-					docsCount:   1,
 				},
 			},
 		},
@@ -89,12 +84,11 @@ func TestInsert(t *testing.T) {
 			assert.Equal(t, c.given, v.Data)
 
 			assert.Equal(t, 1, len(db.docs))
-			assert.Equal(t, 2, len(db.indexes))
+			assert.Equal(t, len(c.expected), len(db.indexes))
 
 			for prop, index := range db.indexes {
-				assert.Equal(t, c.expected[prop].length, len(index.index))
-				assert.Equal(t, c.expected[prop].occurrences, len(index.occurrences))
-				assert.Equal(t, c.expected[prop].docsCount, index.docsCount)
+				assert.Equal(t, c.expected[prop].length, len(index))
+				assert.Equal(t, c.expected[prop].occurrences, len(db.occurrences[prop]))
 			}
 		})
 	}
@@ -108,12 +102,10 @@ func TestInsertBatch(t *testing.T) {
 				"name": {
 					length:      14,
 					occurrences: 14,
-					docsCount:   10,
 				},
 				"email": {
 					length:      10,
 					occurrences: 10,
-					docsCount:   10,
 				},
 			},
 		},
@@ -124,13 +116,12 @@ func TestInsertBatch(t *testing.T) {
 
 			db.InsertBatch(c.given, 3)
 
-			assert.Equal(t, 10, len(db.docs))
-			assert.Equal(t, 2, len(db.indexes))
+			assert.Equal(t, len(c.given), len(db.docs))
+			assert.Equal(t, len(c.expected), len(db.indexes))
 
 			for prop, index := range db.indexes {
-				assert.Equal(t, c.expected[prop].length, len(index.index))
-				assert.Equal(t, c.expected[prop].occurrences, len(index.occurrences))
-				assert.Equal(t, c.expected[prop].docsCount, index.docsCount)
+				assert.Equal(t, c.expected[prop].length, len(index))
+				assert.Equal(t, c.expected[prop].occurrences, len(db.occurrences[prop]))
 			}
 		})
 	}

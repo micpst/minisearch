@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/micpst/minisearch/pkg/invindex"
 	"github.com/micpst/minisearch/pkg/lib"
 )
 
@@ -19,6 +20,11 @@ type Record[Schema SchemaProps] struct {
 }
 
 type Mode string
+
+const (
+	AND Mode = "AND"
+	OR  Mode = "OR"
+)
 
 type SearchParams struct {
 	Query      string
@@ -41,50 +47,28 @@ type SearchHit[Schema SchemaProps] struct {
 
 type SearchHits[Schema SchemaProps] []SearchHit[Schema]
 
-func (r SearchHits[Schema]) Len() int {
-	return len(r)
-}
+func (r SearchHits[Schema]) Len() int { return len(r) }
 
-func (r SearchHits[Schema]) Less(i, j int) bool {
-	return r[i].Score > r[j].Score
-}
+func (r SearchHits[Schema]) Swap(i, j int) { r[i], r[j] = r[j], r[i] }
 
-func (r SearchHits[Schema]) Swap(i, j int) {
-	r[i], r[j] = r[j], r[i]
-}
-
-type findParams struct {
-	query    string
-	boolMode Mode
-}
-
-type recordInfo struct {
-	termFrequency float64
-}
-
-type memIndex struct {
-	index       map[string]map[string]recordInfo
-	occurrences map[string]int
-	docsCount   int
-}
+func (r SearchHits[Schema]) Less(i, j int) bool { return r[i].Score > r[j].Score }
 
 type MemDB[Schema SchemaProps] struct {
-	mutex   sync.RWMutex
-	docs    map[string]Schema
-	indexes map[string]*memIndex
+	mu          sync.RWMutex
+	docs        map[string]Schema
+	indexes     map[string]invindex.InvIndex
+	indexKeys   []string
+	occurrences map[string]map[string]int
 }
-
-const (
-	AND Mode = "AND"
-	OR  Mode = "OR"
-)
 
 const WILDCARD = "*"
 
 func New[Schema SchemaProps]() *MemDB[Schema] {
 	db := &MemDB[Schema]{
-		docs:    make(map[string]Schema),
-		indexes: make(map[string]*memIndex),
+		docs:        make(map[string]Schema),
+		indexes:     make(map[string]invindex.InvIndex),
+		indexKeys:   make([]string, 0),
+		occurrences: make(map[string]map[string]int),
 	}
 	db.buildIndexes()
 	return db
@@ -93,7 +77,9 @@ func New[Schema SchemaProps]() *MemDB[Schema] {
 func (db *MemDB[Schema]) buildIndexes() {
 	var s Schema
 	for key := range flattenSchema(s) {
-		db.indexes[key] = newIndex()
+		db.indexes[key] = invindex.InvIndex{}
+		db.indexKeys = append(db.indexKeys, key)
+		db.occurrences[key] = make(map[string]int)
 	}
 }
 
@@ -101,8 +87,8 @@ func (db *MemDB[Schema]) Insert(doc Schema) (Record[Schema], error) {
 	id := uuid.NewString()
 	docMap := flattenSchema(doc)
 
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
+	db.mu.Lock()
+	defer db.mu.Unlock()
 
 	if _, ok := db.docs[id]; ok {
 		return Record[Schema]{}, fmt.Errorf("document id already exists")
@@ -111,7 +97,7 @@ func (db *MemDB[Schema]) Insert(doc Schema) (Record[Schema], error) {
 	db.docs[id] = doc
 
 	for propName, index := range db.indexes {
-		index.add(id, docMap[propName])
+		db.indexDocumentField(index, propName, id, docMap)
 	}
 
 	return Record[Schema]{Id: id, Data: doc}, nil
@@ -159,18 +145,18 @@ func (db *MemDB[Schema]) InsertBatch(docs []Schema, batchSize int) []error {
 func (db *MemDB[Schema]) Update(id string, doc Schema) (Record[Schema], error) {
 	docMap := flattenSchema(doc)
 
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
+	db.mu.Lock()
+	defer db.mu.Unlock()
 
-	prevDoc, ok := db.docs[id]
+	oldDoc, ok := db.docs[id]
 	if !ok {
 		return Record[Schema]{}, fmt.Errorf("document not found")
 	}
-	prevDocMap := flattenSchema(prevDoc)
 
+	oldDocMap := flattenSchema(oldDoc)
 	for propName, index := range db.indexes {
-		index.remove(id, prevDocMap[propName])
-		index.add(id, docMap[propName])
+		db.deindexDocumentField(index, propName, id, oldDocMap)
+		db.indexDocumentField(index, propName, id, docMap)
 	}
 
 	db.docs[id] = doc
@@ -179,17 +165,17 @@ func (db *MemDB[Schema]) Update(id string, doc Schema) (Record[Schema], error) {
 }
 
 func (db *MemDB[Schema]) Delete(id string) error {
-	db.mutex.Lock()
-	defer db.mutex.Unlock()
+	db.mu.Lock()
+	defer db.mu.Unlock()
 
 	doc, ok := db.docs[id]
 	if !ok {
 		return fmt.Errorf("document not found")
 	}
-	docMap := flattenSchema(doc)
 
+	docMap := flattenSchema(doc)
 	for propName, index := range db.indexes {
-		index.remove(id, docMap[propName])
+		db.deindexDocumentField(index, propName, id, docMap)
 	}
 
 	delete(db.docs, id)
@@ -198,34 +184,40 @@ func (db *MemDB[Schema]) Delete(id string) error {
 }
 
 func (db *MemDB[Schema]) Search(params SearchParams) SearchResult[Schema] {
-	resultIdScores := make(map[string]float64)
+	idScores := make(map[string]float64)
 	results := make(SearchHits[Schema], 0)
+
 	props := params.Properties
-
-	db.mutex.RLock()
-	defer db.mutex.RUnlock()
-
 	if len(props) == 1 && props[0] == WILDCARD {
-		props = make([]string, 0)
-		var s Schema
-		for key := range flattenSchema(s) {
-			props = append(props, key)
-		}
+		props = db.indexKeys
 	}
+
+	tokens := lib.Tokenize(params.Query)
+
+	db.mu.RLock()
+	defer db.mu.RUnlock()
 
 	for _, prop := range props {
 		if index, ok := db.indexes[prop]; ok {
-			idScores := index.find(findParams{
-				query:    params.Query,
-				boolMode: params.BoolMode,
-			})
-			for id, score := range idScores {
-				resultIdScores[id] += score
+			idTokensCount := make(map[string]int)
+
+			for _, token := range tokens {
+				idInfos := index.Find(token)
+				for id, info := range idInfos {
+					idScores[id] += lib.TfIdf(info.TermFrequency, db.occurrences[prop][token], len(db.docs))
+					idTokensCount[id]++
+				}
+			}
+
+			for id, tokensCount := range idTokensCount {
+				if params.BoolMode == AND && tokensCount != len(tokens) {
+					delete(idScores, id)
+				}
 			}
 		}
 	}
 
-	for id, score := range resultIdScores {
+	for id, score := range idScores {
 		if doc, ok := db.docs[id]; ok {
 			results = append(results, SearchHit[Schema]{
 				Id:    id,
@@ -245,73 +237,29 @@ func (db *MemDB[Schema]) Search(params SearchParams) SearchResult[Schema] {
 	}
 }
 
-func newIndex() *memIndex {
-	return &memIndex{
-		index:       make(map[string]map[string]recordInfo),
-		occurrences: make(map[string]int),
-	}
-}
-
-func (idx *memIndex) add(id string, text string) {
-	tokens := lib.Tokenize(text)
+func (db *MemDB[Schema]) indexDocumentField(index invindex.InvIndex, propName string, id string, docMap map[string]string) {
+	tokens := lib.Tokenize(docMap[propName])
 	tokensCount := lib.Count(tokens)
 
 	for token, count := range tokensCount {
-		if _, ok := idx.index[token]; !ok {
-			idx.index[token] = make(map[string]recordInfo)
-		}
+		tokenFrequency := float64(count) / float64(len(tokens))
+		index.Add(id, token, tokenFrequency)
 
-		info := recordInfo{
-			termFrequency: float64(count) / float64(len(tokens)),
-		}
-		idx.index[token][id] = info
-		idx.occurrences[token]++
+		db.occurrences[propName][token]++
 	}
-
-	idx.docsCount++
 }
 
-func (idx *memIndex) remove(id string, text string) {
-	tokens := lib.Tokenize(text)
+func (db *MemDB[Schema]) deindexDocumentField(index invindex.InvIndex, propName string, id string, docMap map[string]string) {
+	tokens := lib.Tokenize(docMap[propName])
 
 	for _, token := range tokens {
-		if _, ok := idx.index[token]; ok {
-			idx.occurrences[token]--
+		index.Remove(id, token)
 
-			if idx.occurrences[token] <= 0 {
-				delete(idx.index, token)
-				delete(idx.occurrences, token)
-			} else {
-				delete(idx.index[token], id)
-			}
+		db.occurrences[propName][token]--
+		if db.occurrences[propName][token] == 0 {
+			delete(db.occurrences[propName], token)
 		}
 	}
-
-	idx.docsCount--
-}
-
-func (idx *memIndex) find(params findParams) map[string]float64 {
-	idScores := make(map[string]float64)
-	idTokensCount := make(map[string]int)
-
-	tokens := lib.Tokenize(params.query)
-
-	for _, token := range tokens {
-		if infos, ok := idx.index[token]; ok {
-			for id, info := range infos {
-				idScores[id] += lib.TfIdf(info.termFrequency, idx.occurrences[token], idx.docsCount)
-				idTokensCount[id]++
-			}
-		}
-	}
-
-	for id, tokensCount := range idTokensCount {
-		if params.boolMode == AND && tokensCount != len(tokens) {
-			delete(idScores, id)
-		}
-	}
-
-	return idScores
 }
 
 func flattenSchema(obj any, prefix ...string) map[string]string {
