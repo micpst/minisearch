@@ -29,29 +29,6 @@ type PaginateOutput struct {
 	stop  int
 }
 
-func TestTokenize(t *testing.T) {
-	cases := []TestCase[string, []string]{
-		{
-			given:    "",
-			expected: []string{},
-		},
-		{
-			given:    "hello, world!",
-			expected: []string{"hello", "world"},
-		},
-		{
-			given:    "Lorem ipsum. Dolor? Sit amet!",
-			expected: []string{"lorem", "ipsum", "dolor", "sit", "amet"},
-		},
-	}
-	for _, c := range cases {
-		t.Run(fmt.Sprintf("'%v'", c.given), func(t *testing.T) {
-			actual := Tokenize(c.given)
-			assert.Equal(t, c.expected, actual)
-		})
-	}
-}
-
 func TestCountTokens(t *testing.T) {
 	cases := []TestCase[[]string, map[string]int]{
 		{
