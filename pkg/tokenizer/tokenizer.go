@@ -2,7 +2,6 @@ package tokenizer
 
 import (
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 )
@@ -33,74 +32,63 @@ var (
 
 type Language string
 
-type TokenizeInput struct {
-	Text            string
-	Language        Language
-	AllowDuplicates bool
-}
-
 type Config struct {
 	EnableStemming  bool
 	EnableStopWords bool
 }
 
-type Tokenizer struct {
-	config *Config
-	cache  map[string]string
+type TokenizeParams struct {
+	Text            string
+	Language        Language
+	AllowDuplicates bool
 }
 
-func New(c *Config) *Tokenizer {
-	return &Tokenizer{
-		config: c,
-		cache:  make(map[string]string),
-	}
+type normalizeParams struct {
+	token    string
+	language Language
 }
 
-func (t *Tokenizer) IsSupportedLanguage(language Language) bool {
+func IsSupportedLanguage(language Language) bool {
 	_, ok := splitRules[language]
 	return ok
 }
 
-func (t *Tokenizer) Tokenize(input *TokenizeInput) ([]string, error) {
-	splitRule, ok := splitRules[input.Language]
+func Tokenize(params *TokenizeParams, config *Config) ([]string, error) {
+	splitRule, ok := splitRules[params.Language]
 	if !ok {
 		return nil, LanguageNotSupported
 	}
 
-	input.Text = strings.ToLower(input.Text)
-	splitText := splitRule.Split(input.Text, -1)
+	params.Text = strings.ToLower(params.Text)
+	splitText := splitRule.Split(params.Text, -1)
 
 	tokens := make([]string, 0)
-	for _, token := range splitText {
+	uniqueTokens := make(map[string]struct{})
 
-		if normToken := t.normalizeToken(token, input.Language); normToken != "" {
-			tokens = append(tokens, normToken)
+	for _, token := range splitText {
+		normParams := normalizeParams{
+			token:    token,
+			language: params.Language,
+		}
+		if normToken := normalizeToken(&normParams, config); normToken != "" {
+			if _, ok := uniqueTokens[normToken]; (!ok && !params.AllowDuplicates) || params.AllowDuplicates {
+				uniqueTokens[normToken] = struct{}{}
+				tokens = append(tokens, normToken)
+			}
 		}
 	}
 
 	return tokens, nil
 }
 
-func (t *Tokenizer) normalizeToken(token string, language Language) string {
-	if token == "" {
+func normalizeToken(params *normalizeParams, config *Config) string {
+	if _, ok := stopWords[params.language][params.token]; config.EnableStopWords && ok {
 		return ""
 	}
 
-	key := fmt.Sprintf("%s:%s", language, token)
-	if cached, ok := t.cache[key]; ok {
-		return cached
+	if stem, ok := stems[params.language]; config.EnableStemming && ok {
+		return stem(params.token, false)
 	}
 
-	if _, ok := stopWords[language][token]; t.config.EnableStopWords && ok {
-		t.cache[key] = ""
-		return ""
-	}
-
-	if stem, ok := stems[language]; t.config.EnableStemming && ok {
-		token = stem(token, false)
-	}
-
-	t.cache[key] = token
-
-	return token
+	return params.token
 }

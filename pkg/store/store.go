@@ -57,6 +57,13 @@ type indexParams struct {
 	language tokenizer.Language
 }
 
+type findParams struct {
+	query      string
+	properties []string
+	boolMode   Mode
+	language   tokenizer.Language
+}
+
 type SearchParams struct {
 	Query      string
 	Properties []string
@@ -97,7 +104,7 @@ type MemDB[Schema SchemaProps] struct {
 	indexKeys       []string
 	occurrences     map[string]map[string]int
 	defaultLanguage tokenizer.Language
-	tokenizer       *tokenizer.Tokenizer
+	tokenizerConfig *tokenizer.Config
 }
 
 func New[Schema SchemaProps](c *Config) *MemDB[Schema] {
@@ -107,7 +114,7 @@ func New[Schema SchemaProps](c *Config) *MemDB[Schema] {
 		indexKeys:       make([]string, 0),
 		occurrences:     make(map[string]map[string]int),
 		defaultLanguage: c.DefaultLanguage,
-		tokenizer:       tokenizer.New(c.TokenizerConfig),
+		tokenizerConfig: c.TokenizerConfig,
 	}
 	db.buildIndexes()
 	return db
@@ -132,7 +139,7 @@ func (db *MemDB[Schema]) Insert(params *InsertParams[Schema]) (Record[Schema], e
 	if idxParams.language == "" {
 		idxParams.language = db.defaultLanguage
 
-	} else if !db.tokenizer.IsSupportedLanguage(idxParams.language) {
+	} else if !tokenizer.IsSupportedLanguage(idxParams.language) {
 		return Record[Schema]{}, fmt.Errorf("not supported language")
 	}
 
@@ -202,14 +209,14 @@ func (db *MemDB[Schema]) Update(params *UpdateParams[Schema]) (Record[Schema], e
 	if idxParams.language == "" {
 		idxParams.language = db.defaultLanguage
 
-	} else if !db.tokenizer.IsSupportedLanguage(params.Language) {
+	} else if !tokenizer.IsSupportedLanguage(idxParams.language) {
 		return Record[Schema]{}, fmt.Errorf("not supported language")
 	}
 
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
-	oldDocument, ok := db.documents[params.Id]
+	oldDocument, ok := db.documents[idxParams.id]
 	if !ok {
 		return Record[Schema]{}, fmt.Errorf("document not found")
 	}
@@ -218,9 +225,9 @@ func (db *MemDB[Schema]) Update(params *UpdateParams[Schema]) (Record[Schema], e
 	idxParams.document = flattenSchema(oldDocument)
 	db.deindexDocument(&idxParams)
 
-	db.documents[params.Id] = params.Document
+	db.documents[idxParams.id] = params.Document
 
-	return Record[Schema]{Id: params.Id, Data: params.Document}, nil
+	return Record[Schema]{Id: idxParams.id, Data: params.Document}, nil
 }
 
 func (db *MemDB[Schema]) Delete(params *DeleteParams[Schema]) error {
@@ -232,14 +239,14 @@ func (db *MemDB[Schema]) Delete(params *DeleteParams[Schema]) error {
 	if idxParams.language == "" {
 		idxParams.language = db.defaultLanguage
 
-	} else if !db.tokenizer.IsSupportedLanguage(params.Language) {
+	} else if !tokenizer.IsSupportedLanguage(idxParams.language) {
 		return fmt.Errorf("not supported language")
 	}
 
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 
-	document, ok := db.documents[params.Id]
+	document, ok := db.documents[idxParams.id]
 	if !ok {
 		return fmt.Errorf("document not found")
 	}
@@ -247,39 +254,59 @@ func (db *MemDB[Schema]) Delete(params *DeleteParams[Schema]) error {
 	idxParams.document = flattenSchema(document)
 	db.deindexDocument(&idxParams)
 
-	delete(db.documents, params.Id)
+	delete(db.documents, idxParams.id)
 
 	return nil
 }
 
 func (db *MemDB[Schema]) Search(params *SearchParams) (SearchResult[Schema], error) {
-	idScores := make(map[string]float64)
-	results := make(SearchHits[Schema], 0)
-
-	props := params.Properties
-	if len(props) == 1 && props[0] == WILDCARD {
-		props = db.indexKeys
+	idxParams := findParams{
+		query:      params.Query,
+		properties: params.Properties,
+		boolMode:   params.BoolMode,
+		language:   params.Language,
 	}
 
-	language := params.Language
-	if language == "" {
-		language = db.defaultLanguage
+	if len(idxParams.properties) == 1 && idxParams.properties[0] == WILDCARD {
+		idxParams.properties = db.indexKeys
 	}
 
-	input := tokenizer.TokenizeInput{
-		Text:            params.Query,
-		Language:        language,
-		AllowDuplicates: false,
-	}
-	tokens, err := db.tokenizer.Tokenize(&input)
-	if err != nil {
-		return SearchResult[Schema]{Hits: results}, err
+	if idxParams.language == "" {
+		idxParams.language = db.defaultLanguage
+
+	} else if !tokenizer.IsSupportedLanguage(idxParams.language) {
+		return SearchResult[Schema]{}, fmt.Errorf("not supported language")
 	}
 
 	db.mutex.RLock()
 	defer db.mutex.RUnlock()
 
-	for _, prop := range props {
+	results := make(SearchHits[Schema], 0)
+	idScores := db.findDocumentIds(&idxParams)
+
+	for id, score := range idScores {
+		if doc, ok := db.documents[id]; ok {
+			results = append(results, SearchHit[Schema]{Id: id, Data: doc, Score: score})
+		}
+	}
+
+	sort.Sort(results)
+
+	start, stop := lib.Paginate(params.Offset, params.Limit, len(results))
+
+	return SearchResult[Schema]{Hits: results[start:stop], Count: len(results)}, nil
+}
+
+func (db *MemDB[Schema]) findDocumentIds(params *findParams) map[string]float64 {
+	tokenParams := tokenizer.TokenizeParams{
+		Text:            params.query,
+		Language:        params.language,
+		AllowDuplicates: false,
+	}
+	tokens, _ := tokenizer.Tokenize(&tokenParams, db.tokenizerConfig)
+
+	idScores := make(map[string]float64)
+	for _, prop := range params.properties {
 		if index, ok := db.indexes[prop]; ok {
 			idTokensCount := make(map[string]int)
 
@@ -292,38 +319,25 @@ func (db *MemDB[Schema]) Search(params *SearchParams) (SearchResult[Schema], err
 			}
 
 			for id, tokensCount := range idTokensCount {
-				if params.BoolMode == AND && tokensCount != len(tokens) {
+				if params.boolMode == AND && tokensCount != len(tokens) {
 					delete(idScores, id)
 				}
 			}
 		}
 	}
 
-	for id, score := range idScores {
-		if doc, ok := db.documents[id]; ok {
-			results = append(results, SearchHit[Schema]{Id: id, Data: doc, Score: score})
-		}
-	}
-
-	sort.Sort(results)
-
-	start, stop := lib.Paginate(params.Offset, params.Limit, len(results))
-
-	return SearchResult[Schema]{
-		Hits:  results[start:stop],
-		Count: len(results),
-	}, nil
+	return idScores
 }
 
 func (db *MemDB[Schema]) indexDocument(params *indexParams) {
-	input := tokenizer.TokenizeInput{
+	tokenParams := tokenizer.TokenizeParams{
 		Language:        params.language,
 		AllowDuplicates: true,
 	}
 
 	for propName, index := range db.indexes {
-		input.Text = params.document[propName]
-		tokens, _ := db.tokenizer.Tokenize(&input)
+		tokenParams.Text = params.document[propName]
+		tokens, _ := tokenizer.Tokenize(&tokenParams, db.tokenizerConfig)
 		tokensCount := lib.Count(tokens)
 
 		for token, count := range tokensCount {
@@ -336,14 +350,14 @@ func (db *MemDB[Schema]) indexDocument(params *indexParams) {
 }
 
 func (db *MemDB[Schema]) deindexDocument(params *indexParams) {
-	input := tokenizer.TokenizeInput{
+	tokenParams := tokenizer.TokenizeParams{
 		Language:        params.language,
 		AllowDuplicates: false,
 	}
 
 	for propName, index := range db.indexes {
-		input.Text = params.document[propName]
-		tokens, _ := db.tokenizer.Tokenize(&input)
+		tokenParams.Text = params.document[propName]
+		tokens, _ := tokenizer.Tokenize(&tokenParams, db.tokenizerConfig)
 
 		for _, token := range tokens {
 			index.Remove(params.id, token)
