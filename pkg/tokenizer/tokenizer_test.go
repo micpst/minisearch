@@ -78,6 +78,23 @@ func TestTokenize(t *testing.T) {
 		{
 			given: TokenizeInput{
 				params: TokenizeParams{
+					Text:            "att sova är en svår sak när testerna misslyckas",
+					Language:        SWEDISH,
+					AllowDuplicates: false,
+				},
+				config: Config{
+					EnableStemming:  true,
+					EnableStopWords: true,
+				},
+			},
+			expected: TokenizeOutput{
+				tokens: []string{"sov", "ar", "svar", "sak", "test", "misslyck"},
+				err:    nil,
+			},
+		},
+		{
+			given: TokenizeInput{
+				params: TokenizeParams{
 					Text:            "Lorem ipsum. Dolor? Sit amet!",
 					Language:        "pl",
 					AllowDuplicates: false,
