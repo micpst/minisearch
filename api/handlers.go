@@ -3,6 +3,7 @@ package api
 import (
 	"compress/gzip"
 	"encoding/xml"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/micpst/minisearch/pkg/store"
+	"github.com/micpst/minisearch/pkg/tokenizer"
 )
 
 type DocumentResponse struct {
@@ -38,11 +40,12 @@ type UploadDocumentsResponse struct {
 }
 
 type SearchDocumentsParams struct {
-	Query      string     `form:"query" binding:"required"`
-	Properties string     `form:"properties"`
-	BoolMode   store.Mode `form:"bool_mode"`
-	Offset     int        `form:"offset"`
-	Limit      int        `form:"limit"`
+	Query      string             `form:"query" binding:"required"`
+	Properties string             `form:"properties"`
+	BoolMode   store.Mode         `form:"bool_mode"`
+	Offset     int                `form:"offset"`
+	Limit      int                `form:"limit"`
+	Language   tokenizer.Language `form:"lang"`
 }
 
 type UploadDocumentsFileDump struct {
@@ -61,31 +64,21 @@ func (s *Server) uploadDocuments(c *gin.Context) {
 	files := form.File["file[]"]
 
 	for _, file := range files {
-		f, err := file.Open()
+		dump, err := loadDocumentsFromFile(file)
 		if err != nil {
 			c.Status(http.StatusBadRequest)
 			return
 		}
 
-		gz, err := gzip.NewReader(f)
-		if err != nil {
-			c.Status(http.StatusBadRequest)
-			return
+		params := store.InsertBatchParams[Document]{
+			Documents: dump.Documents,
+			BatchSize: 10000,
+			Language:  tokenizer.Language(strings.ToLower(c.Query("lang"))),
 		}
+		errs := s.db.InsertBatch(&params)
 
-		d := xml.NewDecoder(gz)
-		dump := UploadDocumentsFileDump{}
-		if err := d.Decode(&dump); err != nil {
-			c.Status(http.StatusBadRequest)
-			return
-		}
-
-		errs := s.db.InsertBatch(dump.Documents, 10000)
 		total += len(dump.Documents)
 		failed += len(errs)
-
-		_ = f.Close()
-		_ = gz.Close()
 	}
 
 	c.JSON(http.StatusOK, UploadDocumentsResponse{
@@ -101,7 +94,12 @@ func (s *Server) createDocument(c *gin.Context) {
 		return
 	}
 
-	doc, err := s.db.Insert(body)
+	params := store.InsertParams[Document]{
+		Document: body,
+		Language: tokenizer.Language(strings.ToLower(c.Query("lang"))),
+	}
+
+	doc, err := s.db.Insert(&params)
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
@@ -111,13 +109,18 @@ func (s *Server) createDocument(c *gin.Context) {
 }
 
 func (s *Server) updateDocument(c *gin.Context) {
-	id := c.Param("id")
 	body := Document{}
 	if err := c.BindJSON(&body); err != nil {
 		return
 	}
 
-	doc, err := s.db.Update(id, body)
+	params := store.UpdateParams[Document]{
+		Id:       c.Param("id"),
+		Document: body,
+		Language: tokenizer.Language(strings.ToLower(c.Query("lang"))),
+	}
+
+	doc, err := s.db.Update(&params)
 	if err != nil {
 		c.Status(http.StatusNotFound)
 		return
@@ -127,8 +130,12 @@ func (s *Server) updateDocument(c *gin.Context) {
 }
 
 func (s *Server) deleteDocument(c *gin.Context) {
-	id := c.Param("id")
-	if err := s.db.Delete(id); err != nil {
+	params := store.DeleteParams[Document]{
+		Id:       c.Param("id"),
+		Language: tokenizer.Language(strings.ToLower(c.Query("lang"))),
+	}
+
+	if err := s.db.Delete(&params); err != nil {
 		c.Status(http.StatusNotFound)
 		return
 	}
@@ -148,14 +155,20 @@ func (s *Server) searchDocuments(c *gin.Context) {
 	}
 
 	start := time.Now()
-	result := s.db.Search(store.SearchParams{
+	result, err := s.db.Search(&store.SearchParams{
 		Query:      params.Query,
 		Properties: strings.Split(params.Properties, ","),
 		BoolMode:   params.BoolMode,
 		Offset:     params.Offset,
 		Limit:      params.Limit,
+		Language:   params.Language,
 	})
 	elapsed := time.Since(start)
+
+	if err != nil {
+		c.Status(http.StatusBadRequest)
+		return
+	}
 
 	c.JSON(http.StatusOK, SearchDocumentResponse{
 		Count:   result.Count,
@@ -171,4 +184,30 @@ func documentFromRecord(d store.Record[Document]) DocumentResponse {
 		Url:      d.Data.Url,
 		Abstract: d.Data.Abstract,
 	}
+}
+
+func loadDocumentsFromFile(file *multipart.FileHeader) (UploadDocumentsFileDump, error) {
+	f, err := file.Open()
+	defer func(f multipart.File) {
+		_ = f.Close()
+	}(f)
+	if err != nil {
+		return UploadDocumentsFileDump{}, err
+	}
+
+	gz, err := gzip.NewReader(f)
+	defer func(gz *gzip.Reader) {
+		_ = gz.Close()
+	}(gz)
+	if err != nil {
+		return UploadDocumentsFileDump{}, err
+	}
+
+	d := xml.NewDecoder(gz)
+	dump := UploadDocumentsFileDump{}
+	if err := d.Decode(&dump); err != nil {
+		return UploadDocumentsFileDump{}, err
+	}
+
+	return dump, nil
 }

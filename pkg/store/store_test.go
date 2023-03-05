@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/micpst/minisearch/pkg/tokenizer"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,7 +16,6 @@ type TestCase[Given any, Expected any] struct {
 type IndexState struct {
 	length      int
 	occurrences int
-	docsCount   int
 }
 
 type User struct {
@@ -47,98 +47,113 @@ var testData = []User{
 var benchmarkData = make([]User, 100000)
 
 func TestInsert(t *testing.T) {
-	cases := []TestCase[User, map[string]IndexState]{
+	cases := []TestCase[InsertParams[User], map[string]IndexState]{
 		{
-			given: testData[0],
+			given: InsertParams[User]{
+				Document: testData[0],
+				Language: tokenizer.ENGLISH,
+			},
 			expected: map[string]IndexState{
 				"name": {
 					length:      2,
 					occurrences: 2,
-					docsCount:   1,
 				},
 				"email": {
-					length:      1,
-					occurrences: 1,
-					docsCount:   1,
+					length:      3,
+					occurrences: 3,
 				},
 			},
 		},
 		{
-			given: testData[1],
+			given: InsertParams[User]{
+				Document: testData[1],
+				Language: tokenizer.ENGLISH,
+			},
 			expected: map[string]IndexState{
 				"name": {
 					length:      1,
 					occurrences: 1,
-					docsCount:   1,
 				},
 				"email": {
-					length:      1,
-					occurrences: 1,
-					docsCount:   1,
+					length:      3,
+					occurrences: 3,
 				},
 			},
 		},
 	}
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
-			db := New[User]()
+			db := New[User](&Config{
+				DefaultLanguage: tokenizer.ENGLISH,
+				TokenizerConfig: &tokenizer.Config{},
+			})
 
-			v, _ := db.Insert(c.given)
+			v, _ := db.Insert(&c.given)
 
 			assert.NotEmpty(t, v.Id)
-			assert.Equal(t, c.given, v.Data)
+			assert.Equal(t, c.given.Document, v.Data)
 
-			assert.Equal(t, 1, len(db.docs))
-			assert.Equal(t, 2, len(db.indexes))
+			assert.Equal(t, 1, len(db.documents))
+			assert.Equal(t, len(c.expected), len(db.indexes))
 
 			for prop, index := range db.indexes {
-				assert.Equal(t, c.expected[prop].length, len(index.index))
-				assert.Equal(t, c.expected[prop].occurrences, len(index.occurrences))
-				assert.Equal(t, c.expected[prop].docsCount, index.docsCount)
+				assert.Equal(t, c.expected[prop].length, len(index))
+				assert.Equal(t, c.expected[prop].occurrences, len(db.occurrences[prop]))
 			}
 		})
 	}
 }
 
 func TestInsertBatch(t *testing.T) {
-	cases := []TestCase[[]User, map[string]IndexState]{
+	cases := []TestCase[InsertBatchParams[User], map[string]IndexState]{
 		{
-			given: testData,
+			given: InsertBatchParams[User]{
+				Documents: testData,
+				BatchSize: 3,
+				Language:  tokenizer.ENGLISH,
+			},
 			expected: map[string]IndexState{
 				"name": {
 					length:      14,
 					occurrences: 14,
-					docsCount:   10,
 				},
 				"email": {
-					length:      10,
-					occurrences: 10,
-					docsCount:   10,
+					length:      12,
+					occurrences: 12,
 				},
 			},
 		},
 	}
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
-			db := New[User]()
+			db := New[User](&Config{
+				DefaultLanguage: tokenizer.ENGLISH,
+				TokenizerConfig: &tokenizer.Config{},
+			})
 
-			db.InsertBatch(c.given, 3)
+			db.InsertBatch(&c.given)
 
-			assert.Equal(t, 10, len(db.docs))
-			assert.Equal(t, 2, len(db.indexes))
+			assert.Equal(t, len(c.given.Documents), len(db.documents))
+			assert.Equal(t, len(c.expected), len(db.indexes))
 
 			for prop, index := range db.indexes {
-				assert.Equal(t, c.expected[prop].length, len(index.index))
-				assert.Equal(t, c.expected[prop].occurrences, len(index.occurrences))
-				assert.Equal(t, c.expected[prop].docsCount, index.docsCount)
+				assert.Equal(t, c.expected[prop].length, len(index))
+				assert.Equal(t, c.expected[prop].occurrences, len(db.occurrences[prop]))
 			}
 		})
 	}
 }
 
 func TestSearch(t *testing.T) {
-	db := New[User]()
-	db.InsertBatch(testData, len(testData))
+	db := New[User](&Config{
+		DefaultLanguage: tokenizer.ENGLISH,
+		TokenizerConfig: &tokenizer.Config{},
+	})
+	db.InsertBatch(&InsertBatchParams[User]{
+		Documents: testData,
+		BatchSize: 3,
+		Language:  tokenizer.ENGLISH,
+	})
 
 	cases := []TestCase[SearchParams, SearchResult[User]]{
 		{
@@ -161,22 +176,26 @@ func TestSearch(t *testing.T) {
 		},
 		{
 			given: SearchParams{
-				Query:      "julia tom@email.com",
+				Query:      "julia tom",
 				Properties: []string{"name", "email"},
 				BoolMode:   OR,
 				Offset:     0,
 				Limit:      10,
 			},
 			expected: SearchResult[User]{
-				Count: 2,
+				Count: 3,
 				Hits: []SearchHit[User]{
 					{
 						Data:  testData[0],
-						Score: 1.992430164690206,
+						Score: 1.4049456586921765,
 					},
 					{
 						Data:  testData[6],
 						Score: 0.996215082345103,
+					},
+					{
+						Data:  testData[4],
+						Score: 0.7408022704621078,
 					},
 				},
 			},
@@ -184,7 +203,7 @@ func TestSearch(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
-			actual := db.Search(c.given)
+			actual, _ := db.Search(&c.given)
 
 			assert.Equal(t, c.expected.Count, actual.Count)
 
@@ -237,19 +256,32 @@ func TestFlattenSchema(t *testing.T) {
 }
 
 func BenchmarkInsert(b *testing.B) {
-	db := New[User]()
+	db := New[User](&Config{
+		DefaultLanguage: tokenizer.ENGLISH,
+		TokenizerConfig: &tokenizer.Config{},
+	})
 
 	for i := 0; i < b.N; i++ {
 		for _, data := range benchmarkData {
-			_, _ = db.Insert(data)
+			_, _ = db.Insert(&InsertParams[User]{
+				Document: data,
+				Language: tokenizer.ENGLISH,
+			})
 		}
 	}
 }
 
 func BenchmarkInsertBatch(b *testing.B) {
-	db := New[User]()
+	db := New[User](&Config{
+		DefaultLanguage: tokenizer.ENGLISH,
+		TokenizerConfig: &tokenizer.Config{},
+	})
 
 	for i := 0; i < b.N; i++ {
-		db.InsertBatch(benchmarkData, 1000)
+		db.InsertBatch(&InsertBatchParams[User]{
+			Documents: benchmarkData,
+			BatchSize: 1000,
+			Language:  tokenizer.ENGLISH,
+		})
 	}
 }

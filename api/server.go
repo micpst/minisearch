@@ -5,26 +5,34 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/micpst/minisearch/pkg/store"
+	"github.com/micpst/minisearch/pkg/tokenizer"
 )
 
 type Config struct {
-	Port               uint
-	MaxMultipartMemory int64
+	DefaultLanguage tokenizer.Language
+	Port            uint
+	UploadLimit     int64
 }
 
 type Server struct {
-	cfg    *Config
+	config *Config
 	db     *store.MemDB[Document]
 	router *gin.Engine
 }
 
-func New(cfg *Config) *Server {
+func New(c *Config) *Server {
 	s := &Server{
-		cfg:    cfg,
-		db:     store.New[Document](),
+		config: c,
+		db: store.New[Document](&store.Config{
+			DefaultLanguage: c.DefaultLanguage,
+			TokenizerConfig: &tokenizer.Config{
+				EnableStemming:  true,
+				EnableStopWords: true,
+			},
+		}),
 		router: gin.Default(),
 	}
-	s.router.MaxMultipartMemory = s.cfg.MaxMultipartMemory
+	s.router.MaxMultipartMemory = s.config.UploadLimit
 	s.initRoutes()
 	return s
 }
@@ -38,5 +46,5 @@ func (s *Server) initRoutes() {
 }
 
 func (s *Server) Run() error {
-	return s.router.Run(fmt.Sprintf(":%d", s.cfg.Port))
+	return s.router.Run(fmt.Sprintf(":%d", s.config.Port))
 }

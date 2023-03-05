@@ -18,27 +18,15 @@ type TfIdfInput struct {
 	matchingDocumentsCount int
 }
 
-func TestTokenize(t *testing.T) {
-	cases := []TestCase[string, []string]{
-		{
-			given:    "",
-			expected: []string{},
-		},
-		{
-			given:    "hello, world!",
-			expected: []string{"hello", "world"},
-		},
-		{
-			given:    "Lorem ipsum. Dolor? Sit amet!",
-			expected: []string{"lorem", "ipsum", "dolor", "sit", "amet"},
-		},
-	}
-	for _, c := range cases {
-		t.Run(fmt.Sprintf("'%v'", c.given), func(t *testing.T) {
-			actual := Tokenize(c.given)
-			assert.Equal(t, c.expected, actual)
-		})
-	}
+type PaginateInput struct {
+	offset int
+	limit  int
+	count  int
+}
+
+type PaginateOutput struct {
+	start int
+	stop  int
 }
 
 func TestCountTokens(t *testing.T) {
@@ -95,6 +83,63 @@ func TestTfIdf(t *testing.T) {
 		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
 			actual := TfIdf(c.given.termFrequency, c.given.matchingDocumentsCount, c.given.documentsCount)
 			assert.Equal(t, c.expected, actual)
+		})
+	}
+}
+
+func TestPaginate(t *testing.T) {
+	cases := []TestCase[PaginateInput, PaginateOutput]{
+		{
+			given: PaginateInput{
+				offset: 5,
+				limit:  5,
+				count:  10,
+			},
+			expected: PaginateOutput{
+				start: 5,
+				stop:  10,
+			},
+		},
+		{
+			given: PaginateInput{
+				offset: 0,
+				limit:  10,
+				count:  11,
+			},
+			expected: PaginateOutput{
+				start: 0,
+				stop:  10,
+			},
+		},
+		{
+			given: PaginateInput{
+				offset: 11,
+				limit:  10,
+				count:  20,
+			},
+			expected: PaginateOutput{
+				start: 11,
+				stop:  20,
+			},
+		},
+		{
+			given: PaginateInput{
+				offset: 0,
+				limit:  10,
+				count:  5,
+			},
+			expected: PaginateOutput{
+				start: 0,
+				stop:  5,
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
+			start, stop := Paginate(c.given.offset, c.given.limit, c.given.count)
+
+			assert.Equal(t, c.expected.start, start)
+			assert.Equal(t, c.expected.stop, stop)
 		})
 	}
 }
