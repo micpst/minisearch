@@ -12,6 +12,11 @@ type TestCase[Given any, Expected any] struct {
 	expected Expected
 }
 
+type CommonPrefixInput struct {
+	a []rune
+	b []rune
+}
+
 type TfIdfInput struct {
 	termFrequency          float64
 	documentsCount         int
@@ -140,6 +145,45 @@ func TestPaginate(t *testing.T) {
 
 			assert.Equal(t, c.expected.start, start)
 			assert.Equal(t, c.expected.stop, stop)
+		})
+	}
+}
+
+func TestCommonPrefix(t *testing.T) {
+	cases := []TestCase[CommonPrefixInput, []rune]{
+		{
+			given: CommonPrefixInput{
+				a: []rune("hello"),
+				b: []rune("world"),
+			},
+			expected: []rune(""),
+		},
+		{
+			given: CommonPrefixInput{
+				a: []rune("hello"),
+				b: []rune("hello"),
+			},
+			expected: []rune("hello"),
+		},
+		{
+			given: CommonPrefixInput{
+				a: []rune("hello"),
+				b: []rune("hello world"),
+			},
+			expected: []rune("hello"),
+		},
+		{
+			given: CommonPrefixInput{
+				a: []rune("读写"),
+				b: []rune("读写汉字"),
+			},
+			expected: []rune("读写"),
+		},
+	}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
+			actual := CommonPrefix(c.given.a, c.given.b)
+			assert.Equal(t, c.expected, actual)
 		})
 	}
 }

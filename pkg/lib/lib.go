@@ -29,3 +29,17 @@ func Paginate(offset int, limit int, sliceLength int) (int, int) {
 
 	return offset, end
 }
+
+func CommonPrefix(a []rune, b []rune) []rune {
+	minLength := int(math.Min(float64(len(a)), float64(len(b))))
+	commonPrefix := make([]rune, 0, minLength)
+
+	for i := 0; i < minLength; i++ {
+		if a[i] != b[i] {
+			break
+		}
+		commonPrefix = append(commonPrefix, a[i])
+	}
+
+	return commonPrefix
+}
