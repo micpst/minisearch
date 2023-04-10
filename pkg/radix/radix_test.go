@@ -196,3 +196,153 @@ func TestInsert(t *testing.T) {
 		})
 	}
 }
+
+func TestDelete(t *testing.T) {
+	cases := []TestCase[[]DeleteParams, Trie]{
+		{
+			given: []DeleteParams{
+				{
+					Id:   "2e48c6df-bafa-4981-b61a-16879dcdde2a",
+					Word: "australian",
+				},
+			},
+			expected: Trie{
+				root: &node{
+					subword: nil,
+					infos:   []RecordInfo{},
+					children: map[rune]*node{
+						'a': {
+							subword: []rune("australia"),
+							infos: []RecordInfo{
+								{
+									Id:            "998c8de6-3c50-4e9e-9835-10f8d1215327",
+									TermFrequency: 1.29513358272291,
+								},
+							},
+							children: map[rune]*node{},
+						},
+						't': {
+							subword: []rune("territory"),
+							infos: []RecordInfo{
+								{
+									Id:            "1e44c6df-bafa-4981-b61a-16879d2dddghf",
+									TermFrequency: 2.27923284424328,
+								},
+							},
+							children: map[rune]*node{},
+						},
+					},
+				},
+			},
+		},
+		{
+			given: []DeleteParams{
+				{
+					Id:   "998c8de6-3c50-4e9e-9835-10f8d1215327",
+					Word: "australia",
+				},
+			},
+			expected: Trie{
+				root: &node{
+					subword: nil,
+					infos:   []RecordInfo{},
+					children: map[rune]*node{
+						'a': {
+							subword: []rune("australian"),
+							infos: []RecordInfo{
+								{
+									Id:            "2e48c6df-bafa-4981-b61a-16879dcdde2a",
+									TermFrequency: 3.64961844222847,
+								},
+							},
+							children: map[rune]*node{},
+						},
+						't': {
+							subword: []rune("territory"),
+							infos: []RecordInfo{
+								{
+									Id:            "1e44c6df-bafa-4981-b61a-16879d2dddghf",
+									TermFrequency: 2.27923284424328,
+								},
+							},
+							children: map[rune]*node{},
+						},
+					},
+				},
+			},
+		},
+		{
+			given: []DeleteParams{
+				{
+					Id:   "11111111-3c50-4e9e-9835-10f8d1215327",
+					Word: "gibberish",
+				},
+			},
+			expected: Trie{
+				root: &node{
+					subword: nil,
+					infos:   []RecordInfo{},
+					children: map[rune]*node{
+						'a': {
+							subword: []rune("australia"),
+							infos: []RecordInfo{
+								{
+									Id:            "998c8de6-3c50-4e9e-9835-10f8d1215327",
+									TermFrequency: 1.29513358272291,
+								},
+							},
+							children: map[rune]*node{
+								'n': {
+									subword: []rune("n"),
+									infos: []RecordInfo{
+										{
+											Id:            "2e48c6df-bafa-4981-b61a-16879dcdde2a",
+											TermFrequency: 3.64961844222847,
+										},
+									},
+									children: map[rune]*node{},
+								},
+							},
+						},
+						't': {
+							subword: []rune("territory"),
+							infos: []RecordInfo{
+								{
+									Id:            "1e44c6df-bafa-4981-b61a-16879d2dddghf",
+									TermFrequency: 2.27923284424328,
+								},
+							},
+							children: map[rune]*node{},
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
+			index := New()
+			index.Insert(&InsertParams{
+				Id:            "2e48c6df-bafa-4981-b61a-16879dcdde2a",
+				Word:          "australian",
+				TermFrequency: 3.64961844222847,
+			})
+			index.Insert(&InsertParams{
+				Id:            "998c8de6-3c50-4e9e-9835-10f8d1215327",
+				Word:          "australia",
+				TermFrequency: 1.29513358272291,
+			})
+			index.Insert(&InsertParams{
+				Id:            "1e44c6df-bafa-4981-b61a-16879d2dddghf",
+				Word:          "territory",
+				TermFrequency: 2.27923284424328,
+			})
+
+			for _, p := range c.given {
+				index.Delete(&p)
+			}
+
+			assert.Equal(t, &c.expected, index)
+		})
+	}
+}
