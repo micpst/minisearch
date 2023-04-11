@@ -28,6 +28,7 @@ func TestInsert(t *testing.T) {
 				},
 			},
 			expected: Trie{
+				length: 1,
 				root: &node{
 					subword: nil,
 					infos:   []RecordInfo{},
@@ -64,6 +65,7 @@ func TestInsert(t *testing.T) {
 				},
 			},
 			expected: Trie{
+				length: 2,
 				root: &node{
 					subword: nil,
 					infos:   []RecordInfo{},
@@ -106,6 +108,7 @@ func TestInsert(t *testing.T) {
 				},
 			},
 			expected: Trie{
+				length: 2,
 				root: &node{
 					subword: nil,
 					infos:   []RecordInfo{},
@@ -154,6 +157,7 @@ func TestInsert(t *testing.T) {
 				},
 			},
 			expected: Trie{
+				length: 2,
 				root: &node{
 					subword: nil,
 					infos:   []RecordInfo{},
@@ -207,6 +211,7 @@ func TestDelete(t *testing.T) {
 				},
 			},
 			expected: Trie{
+				length: 2,
 				root: &node{
 					subword: nil,
 					infos:   []RecordInfo{},
@@ -243,6 +248,7 @@ func TestDelete(t *testing.T) {
 				},
 			},
 			expected: Trie{
+				length: 2,
 				root: &node{
 					subword: nil,
 					infos:   []RecordInfo{},
@@ -279,6 +285,7 @@ func TestDelete(t *testing.T) {
 				},
 			},
 			expected: Trie{
+				length: 3,
 				root: &node{
 					subword: nil,
 					infos:   []RecordInfo{},
@@ -343,6 +350,52 @@ func TestDelete(t *testing.T) {
 			}
 
 			assert.Equal(t, &c.expected, index)
+		})
+	}
+}
+
+func TestFind(t *testing.T) {
+	cases := []TestCase[FindParams, RecordInfos]{
+		{
+			given: FindParams{
+				Term: "what",
+			},
+			expected: RecordInfos{},
+		},
+		{
+			given: FindParams{
+				Term: "australian",
+			},
+			expected: RecordInfos{
+				{
+					Id:            "2e48c6df-bafa-4981-b61a-16879dcdde2a",
+					TermFrequency: 3.64961844222847,
+				},
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
+			index := New()
+			index.Insert(&InsertParams{
+				Id:            "2e48c6df-bafa-4981-b61a-16879dcdde2a",
+				Word:          "australian",
+				TermFrequency: 3.64961844222847,
+			})
+			index.Insert(&InsertParams{
+				Id:            "998c8de6-3c50-4e9e-9835-10f8d1215327",
+				Word:          "australia",
+				TermFrequency: 1.29513358272291,
+			})
+			index.Insert(&InsertParams{
+				Id:            "1e44c6df-bafa-4981-b61a-16879d2dddghf",
+				Word:          "territory",
+				TermFrequency: 2.27923284424328,
+			})
+
+			results := index.Find(&c.given)
+
+			assert.Equal(t, c.expected, results)
 		})
 	}
 }

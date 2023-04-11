@@ -39,6 +39,12 @@ func (n *node) addChild(child *node) {
 	}
 }
 
+func (n *node) removeChild(child *node) {
+	if len(child.subword) > 0 {
+		delete(n.children, child.subword[0])
+	}
+}
+
 func (n *node) addRecordInfo(info RecordInfo) {
 	num := len(n.infos)
 	idx := sort.Search(num, func(i int) bool {
@@ -88,4 +94,21 @@ func (n *node) getRecordInfo(id string) *RecordInfo {
 		return &n.infos[idx]
 	}
 	return nil
+}
+
+func (n *node) findAllRecordInfos() RecordInfos {
+	var results RecordInfos
+	stack := []*node{n}
+
+	for len(stack) > 0 {
+		node := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		results = append(results, node.infos...)
+
+		for _, child := range node.children {
+			stack = append(stack, child)
+		}
+	}
+
+	return results
 }

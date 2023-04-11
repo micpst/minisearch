@@ -36,7 +36,7 @@ watch:
 		-p $(WATCH_PORT):$(WATCH_PORT) \
 		--name $(DOCKER_IMAGE_WATCH) \
 		cosmtrek/air \
-		--build.cmd "go build -race -o $(BINARY_PATH) ./cmd/server" \
+		--build.cmd "go build -buildvcs=false -race -o $(BINARY_PATH) ./cmd/server" \
 		--build.bin "./$(BINARY_PATH) -p $(WATCH_PORT)"
 
 # Test:

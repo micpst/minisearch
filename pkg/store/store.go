@@ -8,8 +8,8 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/micpst/minisearch/pkg/invindex"
 	"github.com/micpst/minisearch/pkg/lib"
+	"github.com/micpst/minisearch/pkg/radix"
 	"github.com/micpst/minisearch/pkg/tokenizer"
 )
 
@@ -100,7 +100,7 @@ type Config struct {
 type MemDB[Schema SchemaProps] struct {
 	mutex           sync.RWMutex
 	documents       map[string]Schema
-	indexes         map[string]invindex.InvIndex
+	indexes         map[string]*radix.Trie
 	indexKeys       []string
 	occurrences     map[string]map[string]int
 	defaultLanguage tokenizer.Language
@@ -110,7 +110,7 @@ type MemDB[Schema SchemaProps] struct {
 func New[Schema SchemaProps](c *Config) *MemDB[Schema] {
 	db := &MemDB[Schema]{
 		documents:       make(map[string]Schema),
-		indexes:         make(map[string]invindex.InvIndex),
+		indexes:         make(map[string]*radix.Trie),
 		indexKeys:       make([]string, 0),
 		occurrences:     make(map[string]map[string]int),
 		defaultLanguage: c.DefaultLanguage,
@@ -123,7 +123,7 @@ func New[Schema SchemaProps](c *Config) *MemDB[Schema] {
 func (db *MemDB[Schema]) buildIndexes() {
 	var s Schema
 	for key := range flattenSchema(s) {
-		db.indexes[key] = invindex.InvIndex{}
+		db.indexes[key] = radix.New()
 		db.indexKeys = append(db.indexKeys, key)
 		db.occurrences[key] = make(map[string]int)
 	}
@@ -311,10 +311,12 @@ func (db *MemDB[Schema]) findDocumentIds(params *findParams) map[string]float64 
 			idTokensCount := make(map[string]int)
 
 			for _, token := range tokens {
-				idInfos := index.Find(token)
-				for id, info := range idInfos {
-					idScores[id] += lib.TfIdf(info.TermFrequency, db.occurrences[prop][token], len(db.documents))
-					idTokensCount[id]++
+				infos := index.Find(&radix.FindParams{
+					Term: token,
+				})
+				for _, info := range infos {
+					idScores[info.Id] += lib.TfIdf(info.TermFrequency, db.occurrences[prop][token], len(db.documents))
+					idTokensCount[info.Id]++
 				}
 			}
 
@@ -342,7 +344,11 @@ func (db *MemDB[Schema]) indexDocument(params *indexParams) {
 
 		for token, count := range tokensCount {
 			tokenFrequency := float64(count) / float64(len(tokens))
-			index.Add(params.id, token, tokenFrequency)
+			index.Insert(&radix.InsertParams{
+				Id:            params.id,
+				Word:          token,
+				TermFrequency: tokenFrequency,
+			})
 
 			db.occurrences[propName][token]++
 		}
@@ -360,7 +366,10 @@ func (db *MemDB[Schema]) deindexDocument(params *indexParams) {
 		tokens, _ := tokenizer.Tokenize(&tokenParams, db.tokenizerConfig)
 
 		for _, token := range tokens {
-			index.Remove(params.id, token)
+			index.Delete(&radix.DeleteParams{
+				Id:   params.id,
+				Word: token,
+			})
 
 			db.occurrences[propName][token]--
 			if db.occurrences[propName][token] == 0 {
