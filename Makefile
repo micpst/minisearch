@@ -18,7 +18,7 @@ setup:
 	@go mod download
 
 build:
-	@go build -o $(BINARY_PATH) ./cmd/server
+	@go build -buildvcs=false -o $(BINARY_PATH) ./cmd/server
 
 clean:
 	@go clean --cache
@@ -57,7 +57,7 @@ lint:
 
 # Release:
 release:
-	@go build -o $(BINARY_NAME) ./cmd/server
+	@go build -buildvcs=false -o $(BINARY_NAME) ./cmd/server
 	@tar -czvf $(RELEASE_NAME).tar.gz $(BINARY_NAME) README.md LICENSE.md
 	@rm $(BINARY_NAME)
 

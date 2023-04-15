@@ -48,19 +48,6 @@ func (n *node) addRecordInfo(info RecordInfo) {
 	n.infos[idx] = info
 }
 
-func (n *node) updateRecordInfo(info RecordInfo) bool {
-	num := len(n.infos)
-	idx := sort.Search(num, func(i int) bool {
-		return n.infos[i].Id >= info.Id
-	})
-
-	if idx < num && n.infos[idx].Id == info.Id {
-		n.infos[idx] = info
-		return true
-	}
-	return false
-}
-
 func (n *node) removeRecordInfo(id string) bool {
 	num := len(n.infos)
 	idx := sort.Search(num, func(i int) bool {
@@ -74,18 +61,6 @@ func (n *node) removeRecordInfo(id string) bool {
 		return true
 	}
 	return false
-}
-
-func (n *node) findRecordInfo(id string) *RecordInfo {
-	num := len(n.infos)
-	idx := sort.Search(num, func(i int) bool {
-		return n.infos[i].Id >= id
-	})
-
-	if idx < num && n.infos[idx].Id == id {
-		return &n.infos[idx]
-	}
-	return nil
 }
 
 func findAllRecordInfos(n *node, word []rune, term []rune, exact bool) []RecordInfo {
