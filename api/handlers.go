@@ -43,6 +43,7 @@ type SearchDocumentsParams struct {
 	Query      string             `form:"query" binding:"required"`
 	Properties string             `form:"properties"`
 	BoolMode   store.Mode         `form:"bool_mode"`
+	Exact      bool               `form:"exact"`
 	Offset     int                `form:"offset"`
 	Limit      int                `form:"limit"`
 	Language   tokenizer.Language `form:"lang"`
@@ -159,6 +160,7 @@ func (s *Server) searchDocuments(c *gin.Context) {
 		Query:      params.Query,
 		Properties: strings.Split(params.Properties, ","),
 		BoolMode:   params.BoolMode,
+		Exact:      params.Exact,
 		Offset:     params.Offset,
 		Limit:      params.Limit,
 		Language:   params.Language,
