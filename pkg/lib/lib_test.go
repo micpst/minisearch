@@ -17,6 +17,11 @@ type CommonPrefixInput struct {
 	b []rune
 }
 
+type CommonPrefixOutput struct {
+	commonPrefix []rune
+	equal        bool
+}
+
 type TfIdfInput struct {
 	termFrequency          float64
 	documentsCount         int
@@ -150,40 +155,54 @@ func TestPaginate(t *testing.T) {
 }
 
 func TestCommonPrefix(t *testing.T) {
-	cases := []TestCase[CommonPrefixInput, []rune]{
+	cases := []TestCase[CommonPrefixInput, CommonPrefixOutput]{
 		{
 			given: CommonPrefixInput{
 				a: []rune("hello"),
 				b: []rune("world"),
 			},
-			expected: []rune(""),
+			expected: CommonPrefixOutput{
+				commonPrefix: []rune(""),
+				equal:        false,
+			},
 		},
 		{
 			given: CommonPrefixInput{
 				a: []rune("hello"),
 				b: []rune("hello"),
 			},
-			expected: []rune("hello"),
+			expected: CommonPrefixOutput{
+				commonPrefix: []rune("hello"),
+				equal:        true,
+			},
 		},
 		{
 			given: CommonPrefixInput{
 				a: []rune("hello"),
 				b: []rune("hello world"),
 			},
-			expected: []rune("hello"),
+			expected: CommonPrefixOutput{
+				commonPrefix: []rune("hello"),
+				equal:        false,
+			},
 		},
 		{
 			given: CommonPrefixInput{
 				a: []rune("读写"),
 				b: []rune("读写汉字"),
 			},
-			expected: []rune("读写"),
+			expected: CommonPrefixOutput{
+				commonPrefix: []rune("读写"),
+				equal:        false,
+			},
 		},
 	}
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
-			actual := CommonPrefix(c.given.a, c.given.b)
-			assert.Equal(t, c.expected, actual)
+			commonPrefix, eq := CommonPrefix(c.given.a, c.given.b)
+
+			assert.Equal(t, c.expected.commonPrefix, commonPrefix)
+			assert.Equal(t, c.expected.equal, eq)
 		})
 	}
 }

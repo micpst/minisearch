@@ -61,6 +61,7 @@ type findParams struct {
 	query      string
 	properties []string
 	boolMode   Mode
+	exact      bool
 	language   tokenizer.Language
 }
 
@@ -68,6 +69,7 @@ type SearchParams struct {
 	Query      string
 	Properties []string
 	BoolMode   Mode
+	Exact      bool
 	Offset     int
 	Limit      int
 	Language   tokenizer.Language
@@ -264,6 +266,7 @@ func (db *MemDB[Schema]) Search(params *SearchParams) (SearchResult[Schema], err
 		query:      params.Query,
 		properties: params.Properties,
 		boolMode:   params.BoolMode,
+		exact:      params.Exact,
 		language:   params.Language,
 	}
 
@@ -312,7 +315,8 @@ func (db *MemDB[Schema]) findDocumentIds(params *findParams) map[string]float64 
 
 			for _, token := range tokens {
 				infos := index.Find(&radix.FindParams{
-					Term: token,
+					Term:  token,
+					Exact: params.exact,
 				})
 				for _, info := range infos {
 					idScores[info.Id] += lib.TfIdf(info.TermFrequency, db.occurrences[prop][token], len(db.documents))

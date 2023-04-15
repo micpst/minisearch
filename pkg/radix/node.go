@@ -2,6 +2,8 @@ package radix
 
 import (
 	"sort"
+
+	"github.com/micpst/minisearch/pkg/lib"
 )
 
 type RecordInfo struct {
@@ -9,27 +11,17 @@ type RecordInfo struct {
 	TermFrequency float64
 }
 
-type RecordInfos []RecordInfo
-
-func (r RecordInfos) Len() int { return len(r) }
-
-func (r RecordInfos) Swap(i, j int) { r[i], r[j] = r[j], r[i] }
-
-func (r RecordInfos) Less(i, j int) bool { return r[i].TermFrequency < r[j].TermFrequency }
-
-func (r RecordInfos) Sort() { sort.Sort(r) }
-
 type node struct {
 	subword  []rune
 	children map[rune]*node
-	infos    RecordInfos
+	infos    []RecordInfo
 }
 
 func newNode(subword []rune) *node {
 	return &node{
 		subword:  subword,
 		children: make(map[rune]*node),
-		infos:    make(RecordInfos, 0),
+		infos:    make([]RecordInfo, 0),
 	}
 }
 
@@ -84,7 +76,7 @@ func (n *node) removeRecordInfo(id string) bool {
 	return false
 }
 
-func (n *node) getRecordInfo(id string) *RecordInfo {
+func (n *node) findRecordInfo(id string) *RecordInfo {
 	num := len(n.infos)
 	idx := sort.Search(num, func(i int) bool {
 		return n.infos[i].Id >= id
@@ -96,19 +88,30 @@ func (n *node) getRecordInfo(id string) *RecordInfo {
 	return nil
 }
 
-func (n *node) findAllRecordInfos() RecordInfos {
-	var results RecordInfos
-	stack := []*node{n}
+func findAllRecordInfos(n *node, word []rune, term []rune, exact bool) []RecordInfo {
+	var results []RecordInfo
+	stack := [][2]interface{}{{n, word}}
 
 	for len(stack) > 0 {
-		node := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		results = append(results, node.infos...)
+		currNode, currWord := stack[len(stack)-1][0].(*node), stack[len(stack)-1][1].([]rune)
 
-		for _, child := range node.children {
-			stack = append(stack, child)
+		stack = stack[:len(stack)-1]
+
+		if _, eq := lib.CommonPrefix(currWord, term); !eq && exact {
+			break
+		}
+		results = append(results, currNode.infos...)
+
+		for _, child := range currNode.children {
+			stack = append(stack, [2]interface{}{child, append(currWord, child.subword...)})
 		}
 	}
 
 	return results
+}
+
+func mergeNodes(a *node, b *node) {
+	a.subword = append(a.subword, b.subword...)
+	a.infos = b.infos
+	a.children = b.children
 }

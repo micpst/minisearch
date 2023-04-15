@@ -16,7 +16,8 @@ type DeleteParams struct {
 }
 
 type FindParams struct {
-	Term string
+	Term  string
+	Exact bool
 }
 
 type Trie struct {
@@ -38,20 +39,20 @@ func (t *Trie) Insert(params *InsertParams) {
 		Id:            params.Id,
 		TermFrequency: params.TermFrequency,
 	}
+	currNode := t.root
 
-	currentNode := t.root
 	for i := 0; i < len(word); {
 		wordAtIndex := word[i:]
 
-		if currentChild, ok := currentNode.children[wordAtIndex[0]]; ok {
-			commonPrefix := lib.CommonPrefix(currentChild.subword, wordAtIndex)
+		if currChild, ok := currNode.children[wordAtIndex[0]]; ok {
+			commonPrefix, _ := lib.CommonPrefix(currChild.subword, wordAtIndex)
 			commonPrefixLength := len(commonPrefix)
-			subwordLength := len(currentChild.subword)
+			subwordLength := len(currChild.subword)
 			wordLength := len(wordAtIndex)
 
 			// the wordAtIndex matches exactly with an existing child node
 			if commonPrefixLength == wordLength && commonPrefixLength == subwordLength {
-				currentChild.addRecordInfo(newInfo)
+				currChild.addRecordInfo(newInfo)
 				return
 			}
 
@@ -60,9 +61,9 @@ func (t *Trie) Insert(params *InsertParams) {
 				n := newNode(wordAtIndex)
 				n.addRecordInfo(newInfo)
 
-				currentChild.subword = currentChild.subword[commonPrefixLength:]
-				n.addChild(currentChild)
-				currentNode.addChild(n)
+				currChild.subword = currChild.subword[commonPrefixLength:]
+				n.addChild(currChild)
+				currNode.addChild(n)
 
 				t.length++
 				return
@@ -74,10 +75,10 @@ func (t *Trie) Insert(params *InsertParams) {
 				n.addRecordInfo(newInfo)
 
 				inBetweenNode := newNode(wordAtIndex[:commonPrefixLength])
-				currentNode.addChild(inBetweenNode)
+				currNode.addChild(inBetweenNode)
 
-				currentChild.subword = currentChild.subword[commonPrefixLength:]
-				inBetweenNode.addChild(currentChild)
+				currChild.subword = currChild.subword[commonPrefixLength:]
+				inBetweenNode.addChild(currChild)
 				inBetweenNode.addChild(n)
 
 				t.length++
@@ -88,13 +89,13 @@ func (t *Trie) Insert(params *InsertParams) {
 			i += subwordLength
 
 			// navigate in the child node
-			currentNode = currentChild
+			currNode = currChild
 		} else {
-			// if the node for the current character doesn't exist create a new child node
+			// if the node for the curr character doesn't exist create a new child node
 			n := newNode(wordAtIndex)
 			n.addRecordInfo(newInfo)
 
-			currentNode.addChild(n)
+			currNode.addChild(n)
 			t.length++
 			return
 		}
@@ -102,39 +103,27 @@ func (t *Trie) Insert(params *InsertParams) {
 }
 
 func (t *Trie) Delete(params *DeleteParams) {
-	if params.Word == "" {
-		return
-	}
-
 	word := []rune(params.Word)
-	currentNode := t.root
+	currNode := t.root
 
 	for i := 0; i < len(word); {
 		char := word[i]
 		wordAtIndex := word[i:]
 
-		if currentChild, ok := currentNode.children[char]; ok {
-			commonPrefix := lib.CommonPrefix(currentChild.subword, wordAtIndex)
-			commonPrefixLength := len(commonPrefix)
-			subwordLength := len(currentChild.subword)
-			wordLength := len(wordAtIndex)
+		if currChild, ok := currNode.children[char]; ok {
+			if _, eq := lib.CommonPrefix(currChild.subword, wordAtIndex); eq {
+				currChild.removeRecordInfo(params.Id)
 
-			// the wordAtIndex matches exactly with an existing child node
-			if commonPrefixLength == wordLength && commonPrefixLength == subwordLength {
-				currentChild.removeRecordInfo(params.Id)
-
-				if len(currentChild.infos) == 0 {
-					switch len(currentChild.children) {
+				if len(currChild.infos) == 0 {
+					switch len(currChild.children) {
 					case 0:
 						// if the node to be deleted has no children, delete it
-						delete(currentNode.children, char)
+						currNode.removeChild(currChild)
 						t.length--
 					case 1:
 						// if the node to be deleted has one child, promote it to the parent node
-						for _, child := range currentChild.children {
-							currentChild.subword = append(currentChild.subword, child.subword...)
-							currentChild.infos = child.infos
-							currentChild.children = child.children
+						for _, child := range currChild.children {
+							mergeNodes(currChild, child)
 						}
 						t.length--
 					}
@@ -143,46 +132,51 @@ func (t *Trie) Delete(params *DeleteParams) {
 			}
 
 			// skip to the next divergent character
-			i += subwordLength
+			i += len(currChild.subword)
 
 			// navigate in the child node
-			currentNode = currentChild
+			currNode = currChild
 		} else {
-			// if the node for the current character doesn't exist abort the deletion
+			// if the node for the curr character doesn't exist abort the deletion
 			return
 		}
 	}
 }
 
-func (t *Trie) Find(params *FindParams) RecordInfos {
-	word := []rune(params.Term)
-	currentNode := t.root
+func (t *Trie) Find(params *FindParams) []RecordInfo {
+	term := []rune(params.Term)
+	currNode := t.root
+	currNodeWord := currNode.subword
 
-	for i := 0; i < len(word); {
-		char := word[i]
-		wordAtIndex := word[i:]
+	for i := 0; i < len(term); {
+		char := term[i]
+		wordAtIndex := term[i:]
 
-		if currentChild, ok := currentNode.children[char]; ok {
-			commonPrefix := lib.CommonPrefix(currentChild.subword, wordAtIndex)
+		if currChild, ok := currNode.children[char]; ok {
+			commonPrefix, _ := lib.CommonPrefix(currChild.subword, wordAtIndex)
 			commonPrefixLength := len(commonPrefix)
-			subwordLength := len(currentChild.subword)
+			subwordLength := len(currChild.subword)
 			wordLength := len(wordAtIndex)
 
-			// the wordAtIndex doesn't match exactly with an existing child node
+			// if the common prefix length is equal to the node subword length it means they are a match
+			// if the common prefix is equal to the term means it is contained in the node
 			if commonPrefixLength != wordLength && commonPrefixLength != subwordLength {
-				return RecordInfos{}
+				return []RecordInfo{}
 			}
 
 			// skip to the next divergent character
 			i += subwordLength
 
 			// navigate in the child node
-			currentNode = currentChild
+			currNode = currChild
+
+			// update the current node word
+			currNodeWord = append(currNodeWord, currChild.subword...)
 		} else {
-			// if the node for the current character doesn't exist abort the deletion
-			return RecordInfos{}
+			// if the node for the curr character doesn't exist abort the deletion
+			return []RecordInfo{}
 		}
 	}
 
-	return currentNode.findAllRecordInfos()
+	return findAllRecordInfos(currNode, currNodeWord, term, params.Exact)
 }

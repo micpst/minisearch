@@ -355,18 +355,48 @@ func TestDelete(t *testing.T) {
 }
 
 func TestFind(t *testing.T) {
-	cases := []TestCase[FindParams, RecordInfos]{
+	cases := []TestCase[FindParams, []RecordInfo]{
 		{
 			given: FindParams{
-				Term: "what",
+				Term:  "what",
+				Exact: false,
 			},
-			expected: RecordInfos{},
+			expected: []RecordInfo{},
 		},
 		{
 			given: FindParams{
-				Term: "australian",
+				Term:  "australia",
+				Exact: true,
 			},
-			expected: RecordInfos{
+			expected: []RecordInfo{
+				{
+					Id:            "998c8de6-3c50-4e9e-9835-10f8d1215327",
+					TermFrequency: 1.29513358272291,
+				},
+			},
+		},
+		{
+			given: FindParams{
+				Term:  "australia",
+				Exact: false,
+			},
+			expected: []RecordInfo{
+				{
+					Id:            "998c8de6-3c50-4e9e-9835-10f8d1215327",
+					TermFrequency: 1.29513358272291,
+				},
+				{
+					Id:            "2e48c6df-bafa-4981-b61a-16879dcdde2a",
+					TermFrequency: 3.64961844222847,
+				},
+			},
+		},
+		{
+			given: FindParams{
+				Term:  "australian",
+				Exact: true,
+			},
+			expected: []RecordInfo{
 				{
 					Id:            "2e48c6df-bafa-4981-b61a-16879dcdde2a",
 					TermFrequency: 3.64961844222847,
