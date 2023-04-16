@@ -104,10 +104,30 @@ $ curl -X DELETE localhost:3000/api/v1/documents/<id>
 ### Search the index
 To search the index for documents that contain specific words, use the following request:
 ```bash
-$ curl -G localhost:3000/api/v1/search \
-    -d query=silicon%20brain \
-    -d properties=title,abstract \
-    -d bool_mode=AND
+$ curl -X POST localhost:3000/api/v1/search \
+    -H 'Content-Type: application/json' \
+    -d '{
+      "query": "The Silicon Brain",
+      "properties": ["title", "abstract"],
+      "boolMode": true,
+      "tolerance": 2,
+      "exact": false,
+      "limit": 10,
+      "offset": 0,
+      "lang": "en"
+    }'
+```
+Note that all fields except `"query"` are optional. The default values are:
+```json
+{
+  "properties": [],
+  "boolMode": "AND",
+  "tolerance": 0,
+  "exact": false,
+  "limit": 10,
+  "offset": 0,
+  "lang": "en"
+}
 ```
 
 ## 📄 License

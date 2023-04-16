@@ -39,15 +39,15 @@ type UploadDocumentsResponse struct {
 	Fail    int `json:"fail"`
 }
 
-type SearchDocumentsParams struct {
-	Query      string             `form:"query" binding:"required"`
-	Properties string             `form:"properties"`
-	BoolMode   store.Mode         `form:"bool_mode"`
-	Exact      bool               `form:"exact"`
-	Tolerance  int                `form:"tolerance"`
-	Offset     int                `form:"offset"`
-	Limit      int                `form:"limit"`
-	Language   tokenizer.Language `form:"lang"`
+type SearchDocumentsBody struct {
+	Query      string             `json:"query" binding:"required"`
+	Properties []string           `json:"properties"`
+	BoolMode   store.Mode         `json:"boolMode"`
+	Exact      bool               `json:"exact"`
+	Tolerance  int                `json:"tolerance"`
+	Offset     int                `json:"offset"`
+	Limit      int                `json:"limit"`
+	Language   tokenizer.Language `json:"lang"`
 }
 
 type UploadDocumentsFileDump struct {
@@ -146,27 +146,19 @@ func (s *Server) deleteDocument(c *gin.Context) {
 }
 
 func (s *Server) searchDocuments(c *gin.Context) {
-	params := SearchDocumentsParams{
-		Properties: store.WILDCARD,
+	body := SearchDocumentsBody{
+		Properties: []string{},
 		BoolMode:   store.AND,
 		Offset:     0,
 		Limit:      10,
 	}
-	if err := c.Bind(&params); err != nil {
+	if err := c.BindJSON(&body); err != nil {
 		return
 	}
 
 	start := time.Now()
-	result, err := s.db.Search(&store.SearchParams{
-		Query:      params.Query,
-		Properties: strings.Split(params.Properties, ","),
-		BoolMode:   params.BoolMode,
-		Exact:      params.Exact,
-		Tolerance:  params.Tolerance,
-		Offset:     params.Offset,
-		Limit:      params.Limit,
-		Language:   params.Language,
-	})
+	params := store.SearchParams(body)
+	result, err := s.db.Search(&params)
 	elapsed := time.Since(start)
 
 	if err != nil {

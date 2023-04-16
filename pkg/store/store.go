@@ -18,8 +18,6 @@ const (
 	OR  Mode = "OR"
 )
 
-const WILDCARD = "*"
-
 type Mode string
 
 type SchemaProps any
@@ -273,7 +271,7 @@ func (db *MemDB[Schema]) Search(params *SearchParams) (SearchResult[Schema], err
 		language:   params.Language,
 	}
 
-	if len(idxParams.properties) == 1 && idxParams.properties[0] == WILDCARD {
+	if len(idxParams.properties) == 0 {
 		idxParams.properties = db.indexKeys
 	}
 

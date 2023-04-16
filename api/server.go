@@ -38,7 +38,7 @@ func New(c *Config) *Server {
 }
 
 func (s *Server) initRoutes() {
-	s.router.GET("/api/v1/search", s.searchDocuments)
+	s.router.POST("/api/v1/search", s.searchDocuments)
 	s.router.POST("/api/v1/upload", s.uploadDocuments)
 	s.router.POST("/api/v1/documents", s.createDocument)
 	s.router.PUT("/api/v1/documents/:id", s.updateDocument)
