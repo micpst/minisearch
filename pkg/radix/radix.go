@@ -16,8 +16,9 @@ type DeleteParams struct {
 }
 
 type FindParams struct {
-	Term  string
-	Exact bool
+	Term      string
+	Tolerance int
+	Exact     bool
 }
 
 type Trie struct {
@@ -161,6 +162,9 @@ func (t *Trie) Find(params *FindParams) []RecordInfo {
 			// if the common prefix length is equal to the node subword length it means they are a match
 			// if the common prefix is equal to the term means it is contained in the node
 			if commonPrefixLength != wordLength && commonPrefixLength != subwordLength {
+				if params.Tolerance > 0 {
+					break
+				}
 				return []RecordInfo{}
 			}
 
@@ -178,5 +182,5 @@ func (t *Trie) Find(params *FindParams) []RecordInfo {
 		}
 	}
 
-	return findAllRecordInfos(currNode, currNodeWord, term, params.Exact)
+	return findAllRecordInfos(currNode, currNodeWord, term, params.Tolerance, params.Exact)
 }

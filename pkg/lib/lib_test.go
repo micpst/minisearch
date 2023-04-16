@@ -12,6 +12,17 @@ type TestCase[Given any, Expected any] struct {
 	expected Expected
 }
 
+type BoundedLevenshteinInput struct {
+	a         []rune
+	b         []rune
+	tolerance int
+}
+
+type BoundedLevenshteinOutput struct {
+	distance  int
+	isBounded bool
+}
+
 type CommonPrefixInput struct {
 	a []rune
 	b []rune
@@ -203,6 +214,63 @@ func TestCommonPrefix(t *testing.T) {
 
 			assert.Equal(t, c.expected.commonPrefix, commonPrefix)
 			assert.Equal(t, c.expected.equal, eq)
+		})
+	}
+}
+
+func TestBoundedLevenshtein(t *testing.T) {
+	cases := []TestCase[BoundedLevenshteinInput, BoundedLevenshteinOutput]{
+		{
+			given: BoundedLevenshteinInput{
+				a:         []rune(""),
+				b:         []rune(""),
+				tolerance: 1,
+			},
+			expected: BoundedLevenshteinOutput{
+				distance:  0,
+				isBounded: true,
+			},
+		},
+		{
+			given: BoundedLevenshteinInput{
+				a:         []rune("kitten"),
+				b:         []rune("sitting"),
+				tolerance: 1,
+			},
+			expected: BoundedLevenshteinOutput{
+				distance:  -1,
+				isBounded: false,
+			},
+		},
+		{
+			given: BoundedLevenshteinInput{
+				a:         []rune("Saturday"),
+				b:         []rune("Sunday"),
+				tolerance: 3,
+			},
+			expected: BoundedLevenshteinOutput{
+				distance:  3,
+				isBounded: true,
+			},
+		},
+		{
+			given: BoundedLevenshteinInput{
+				a:         []rune("foo"),
+				b:         []rune("bar"),
+				tolerance: 2,
+			},
+			expected: BoundedLevenshteinOutput{
+				distance:  -1,
+				isBounded: false,
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
+			distance, isBounded := BoundedLevenshtein(c.given.a, c.given.b, c.given.tolerance)
+
+			assert.Equal(t, c.expected.distance, distance)
+			assert.Equal(t, c.expected.isBounded, isBounded)
 		})
 	}
 }

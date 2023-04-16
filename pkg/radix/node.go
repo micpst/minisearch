@@ -1,6 +1,7 @@
 package radix
 
 import (
+	"log"
 	"sort"
 
 	"github.com/micpst/minisearch/pkg/lib"
@@ -63,19 +64,26 @@ func (n *node) removeRecordInfo(id string) bool {
 	return false
 }
 
-func findAllRecordInfos(n *node, word []rune, term []rune, exact bool) []RecordInfo {
+func findAllRecordInfos(n *node, word []rune, term []rune, tolerance int, exact bool) []RecordInfo {
 	var results []RecordInfo
 	stack := [][2]interface{}{{n, word}}
 
 	for len(stack) > 0 {
 		currNode, currWord := stack[len(stack)-1][0].(*node), stack[len(stack)-1][1].([]rune)
-
 		stack = stack[:len(stack)-1]
 
 		if _, eq := lib.CommonPrefix(currWord, term); !eq && exact {
 			break
 		}
-		results = append(results, currNode.infos...)
+
+		if tolerance > 0 {
+			log.Println(string(currWord), string(term), tolerance)
+			if _, isBounded := lib.BoundedLevenshtein(currWord, term, tolerance); isBounded {
+				results = append(results, currNode.infos...)
+			}
+		} else {
+			results = append(results, currNode.infos...)
+		}
 
 		for _, child := range currNode.children {
 			stack = append(stack, [2]interface{}{child, append(currWord, child.subword...)})
