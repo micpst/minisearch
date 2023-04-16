@@ -358,8 +358,9 @@ func TestFind(t *testing.T) {
 	cases := []TestCase[FindParams, []RecordInfo]{
 		{
 			given: FindParams{
-				Term:  "what",
-				Exact: false,
+				Term:      "what",
+				Tolerance: 0,
+				Exact:     false,
 			},
 			expected: []RecordInfo{},
 		},
@@ -377,8 +378,9 @@ func TestFind(t *testing.T) {
 		},
 		{
 			given: FindParams{
-				Term:  "australia",
-				Exact: false,
+				Term:      "australia",
+				Tolerance: 0,
+				Exact:     false,
 			},
 			expected: []RecordInfo{
 				{
@@ -393,13 +395,27 @@ func TestFind(t *testing.T) {
 		},
 		{
 			given: FindParams{
-				Term:  "australian",
-				Exact: true,
+				Term:      "australian",
+				Tolerance: 2,
+				Exact:     false,
 			},
 			expected: []RecordInfo{
 				{
 					Id:            "2e48c6df-bafa-4981-b61a-16879dcdde2a",
 					TermFrequency: 3.64961844222847,
+				},
+			},
+		},
+		{
+			given: FindParams{
+				Term:      "austra",
+				Tolerance: 3,
+				Exact:     false,
+			},
+			expected: []RecordInfo{
+				{
+					Id:            "998c8de6-3c50-4e9e-9835-10f8d1215327",
+					TermFrequency: 1.29513358272291,
 				},
 			},
 		},
@@ -419,7 +435,7 @@ func TestFind(t *testing.T) {
 			})
 			index.Insert(&InsertParams{
 				Id:            "1e44c6df-bafa-4981-b61a-16879d2dddghf",
-				Word:          "territory",
+				Word:          "austrian",
 				TermFrequency: 2.27923284424328,
 			})
 
