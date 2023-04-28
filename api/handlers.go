@@ -39,17 +39,6 @@ type UploadDocumentsResponse struct {
 	Fail    int `json:"fail"`
 }
 
-type SearchDocumentsBody struct {
-	Query      string             `json:"query" binding:"required"`
-	Properties []string           `json:"properties"`
-	BoolMode   store.Mode         `json:"boolMode"`
-	Exact      bool               `json:"exact"`
-	Tolerance  int                `json:"tolerance"`
-	Offset     int                `json:"offset"`
-	Limit      int                `json:"limit"`
-	Language   tokenizer.Language `json:"lang"`
-}
-
 type UploadDocumentsFileDump struct {
 	Documents []Document `xml:"doc"`
 }
@@ -146,18 +135,21 @@ func (s *Server) deleteDocument(c *gin.Context) {
 }
 
 func (s *Server) searchDocuments(c *gin.Context) {
-	body := SearchDocumentsBody{
+	params := store.SearchParams{
 		Properties: []string{},
 		BoolMode:   store.AND,
-		Offset:     0,
 		Limit:      10,
+		Relevance: store.BM25Params{
+			K: 1.2,
+			B: 0.75,
+			D: 0.5,
+		},
 	}
-	if err := c.BindJSON(&body); err != nil {
+	if err := c.BindJSON(&params); err != nil {
 		return
 	}
 
 	start := time.Now()
-	params := store.SearchParams(body)
 	result, err := s.db.Search(&params)
 	elapsed := time.Since(start)
 

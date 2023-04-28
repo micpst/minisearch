@@ -97,8 +97,8 @@ func TestInsert(t *testing.T) {
 			assert.Equal(t, len(c.expected), len(db.indexes))
 
 			for prop, index := range db.indexes {
-				assert.Equal(t, c.expected[prop].length, index.Len())
-				assert.Equal(t, c.expected[prop].occurrences, len(db.occurrences[prop]))
+				assert.Equal(t, c.expected[prop].length, index.data.Len())
+				assert.Equal(t, c.expected[prop].occurrences, len(index.tokenOccurrences))
 			}
 		})
 	}
@@ -137,8 +137,8 @@ func TestInsertBatch(t *testing.T) {
 			assert.Equal(t, len(c.expected), len(db.indexes))
 
 			for prop, index := range db.indexes {
-				assert.Equal(t, c.expected[prop].length, index.Len())
-				assert.Equal(t, c.expected[prop].occurrences, len(db.occurrences[prop]))
+				assert.Equal(t, c.expected[prop].length, index.data.Len())
+				assert.Equal(t, c.expected[prop].occurrences, len(index.tokenOccurrences))
 			}
 		})
 	}
@@ -169,7 +169,7 @@ func TestSearch(t *testing.T) {
 				Hits: []SearchHit[User]{
 					{
 						Data:  testData[3],
-						Score: 1.7370173528072108,
+						Score: 3.4740347056144216,
 					},
 				},
 			},
@@ -187,15 +187,15 @@ func TestSearch(t *testing.T) {
 				Hits: []SearchHit[User]{
 					{
 						Data:  testData[6],
-						Score: 2.026562566797875,
+						Score: 5.083472618048522,
 					},
 					{
 						Data:  testData[0],
-						Score: 1.4049456586921765,
+						Score: 3.4740347056144216,
 					},
 					{
 						Data:  testData[4],
-						Score: 0.7408022704621078,
+						Score: 1.4816045409242156,
 					},
 				},
 			},

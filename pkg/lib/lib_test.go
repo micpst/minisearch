@@ -12,6 +12,17 @@ type TestCase[Given any, Expected any] struct {
 	expected Expected
 }
 
+type BM25Input struct {
+	termFrequency          float64
+	matchingDocumentsCount int
+	fieldLength            int
+	averageFieldLength     float64
+	documentsCount         int
+	k                      float64
+	b                      float64
+	d                      float64
+}
+
 type BoundedLevenshteinInput struct {
 	a         []rune
 	b         []rune
@@ -31,12 +42,6 @@ type CommonPrefixInput struct {
 type CommonPrefixOutput struct {
 	commonPrefix []rune
 	equal        bool
-}
-
-type TfIdfInput struct {
-	termFrequency          float64
-	documentsCount         int
-	matchingDocumentsCount int
 }
 
 type PaginateInput struct {
@@ -73,36 +78,60 @@ func TestCountTokens(t *testing.T) {
 	}
 }
 
-func TestTfIdf(t *testing.T) {
-	cases := []TestCase[TfIdfInput, float64]{
+func TestBM25(t *testing.T) {
+	cases := []TestCase[BM25Input, float64]{
 		{
-			given: TfIdfInput{
-				termFrequency:          1,
+			given: BM25Input{
+				termFrequency:          1.0,
 				documentsCount:         1,
 				matchingDocumentsCount: 1,
+				fieldLength:            10,
+				averageFieldLength:     10.0,
+				k:                      1.0,
+				b:                      1.0,
+				d:                      1.0,
 			},
-			expected: 0.2876820724517809,
+			expected: 0.43152310867767135,
 		},
 		{
-			given: TfIdfInput{
+			given: BM25Input{
 				termFrequency:          0.5,
-				documentsCount:         1,
+				documentsCount:         2,
 				matchingDocumentsCount: 1,
+				fieldLength:            10,
+				averageFieldLength:     12.43,
+				k:                      1.2,
+				b:                      0.75,
+				d:                      0.5,
 			},
-			expected: 0.14384103622589045,
+			expected: 0.7276874539155506,
 		},
 		{
-			given: TfIdfInput{
-				termFrequency:          1,
+			given: BM25Input{
+				termFrequency:          0.75,
 				documentsCount:         3,
 				matchingDocumentsCount: 1,
+				fieldLength:            10,
+				averageFieldLength:     5.32,
+				k:                      1.2,
+				b:                      0.75,
+				d:                      0.5,
 			},
-			expected: 0.9808292530117264,
+			expected: 0.7691433563655649,
 		},
 	}
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
-			actual := TfIdf(c.given.termFrequency, c.given.matchingDocumentsCount, c.given.documentsCount)
+			actual := BM25(
+				c.given.termFrequency,
+				c.given.matchingDocumentsCount,
+				c.given.fieldLength,
+				c.given.averageFieldLength,
+				c.given.documentsCount,
+				c.given.k,
+				c.given.b,
+				c.given.d,
+			)
 			assert.Equal(t, c.expected, actual)
 		})
 	}

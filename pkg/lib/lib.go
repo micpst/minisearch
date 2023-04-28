@@ -12,9 +12,9 @@ func Count(tokens []string) map[string]int {
 	return tokensCounter
 }
 
-func TfIdf(tf float64, matchingDocsCount int, docsCount int) float64 {
+func BM25(tf float64, matchingDocsCount int, fieldLength int, avgFieldLength float64, docsCount int, k float64, b float64, d float64) float64 {
 	idf := math.Log(1 + (float64(docsCount-matchingDocsCount)+0.5)/(float64(matchingDocsCount)+0.5))
-	return tf * idf
+	return idf * (d + tf*(k+1)) / (tf + k*(1-b+(b*float64(fieldLength))/avgFieldLength))
 }
 
 func Paginate(offset int, limit int, sliceLength int) (int, int) {
