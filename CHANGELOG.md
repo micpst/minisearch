@@ -1,10 +1,21 @@
 # Changelog
 
+## [1.2.0] 2023-04-28
+
+### Added:
+- Search results ranking based on BM25
+- Stemming-based query expansion for many languages
+- Vector similarity search for semantic search
+
+### Changed:
+- Change search API endpoint HTTP method to POST
+- Move search params from query string to request body
+
 ## [1.1.0] 2023-02-26
 
 ### Added:
-- Add search results ranking based on TF-IDF
-- Add results pagination
+- Search results ranking based on TF-IDF
+- Results pagination
 
 ### Changed:
 - Rename project to `minisearch`
