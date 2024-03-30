@@ -1,0 +1,26 @@
+repos:
+  - repo: local
+    hooks:
+      - id: format
+        name: format code
+        entry: make format
+        language: system
+        always_run: true
+
+      - id: lint
+        name: check code style
+        entry: make lint
+        language: system
+        always_run: true
+
+      - id: test
+        name: run tests
+        entry: make test
+        language: system
+        always_run: true
+
+      - id: build
+        name: build the project
+        entry: make build
+        language: system
+        always_run: true

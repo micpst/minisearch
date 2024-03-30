@@ -55,6 +55,9 @@ bench:
 lint:
 	@golangci-lint run --timeout=3m
 
+format:
+	@go fmt ./...
+
 # Release:
 release:
 	@go build -buildvcs=false -o $(BINARY_NAME) ./cmd/server
