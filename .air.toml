@@ -1,0 +1,11 @@
+[build]
+  args_bin = [
+    "-p",
+    "3000",
+  ]
+  bin = "./bin/server"
+  cmd = "make build"
+  exclude_dir = [
+    "bin",
+    "tmp",
+  ]

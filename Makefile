@@ -1,8 +1,13 @@
+# Build config:
 BINARY_DIR=bin
 BINARY_NAME=server
 BINARY_PATH=$(BINARY_DIR)/$(BINARY_NAME)
 RELEASE_NAME=minisearch
+
+# Test config:
 COVERAGE_PROFILE=cover.out
+
+# Docker config:
 DOCKER_IMAGE=minisearch
 DOCKER_IMAGE_DEV=$(DOCKER_IMAGE)-dev
 DOCKER_IMAGE_WATCH=$(DOCKER_IMAGE)-watch
@@ -33,11 +38,9 @@ watch:
 	@docker run -it --rm \
 		-w /go/src/$(PACKAGE_NAME) \
 		-v $(shell pwd):/go/src/$(PACKAGE_NAME) \
-		-p $(WATCH_PORT):$(WATCH_PORT) \
+		-p $(WATCH_PORT):3000 \
 		--name $(DOCKER_IMAGE_WATCH) \
-		cosmtrek/air \
-		--build.cmd "go build -buildvcs=false -race -o $(BINARY_PATH) ./cmd/server" \
-		--build.bin "./$(BINARY_PATH) -p $(WATCH_PORT)"
+		cosmtrek/air:v1.51.0
 
 # Test:
 test:
@@ -51,12 +54,13 @@ coverage:
 bench:
 	@go test -bench=. -run=^a -benchtime=5x ./...
 
-# Lint
-lint:
-	@golangci-lint run --timeout=3m
-
+# Format:
 format:
 	@go fmt ./...
+
+# Lint:
+lint:
+	@golangci-lint run
 
 # Release:
 release:

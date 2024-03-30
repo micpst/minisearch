@@ -1,4 +1,14 @@
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+
   - repo: local
     hooks:
       - id: format
@@ -20,7 +30,7 @@ repos:
         always_run: true
 
       - id: build
-        name: build the project
+        name: build project
         entry: make build
         language: system
         always_run: true
