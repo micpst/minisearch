@@ -1,7 +1,6 @@
 package tokenizer
 
 import (
-	"errors"
 	"regexp"
 	"strings"
 	"unicode"
@@ -33,10 +32,6 @@ var splitRules = map[Language]*regexp.Regexp{
 
 var normalizer = transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
 
-var (
-	LanguageNotSupported = errors.New("language not supported")
-)
-
 type Language string
 
 type Config struct {
@@ -63,7 +58,7 @@ func IsSupportedLanguage(language Language) bool {
 func Tokenize(params *TokenizeParams, config *Config) ([]string, error) {
 	splitRule, ok := splitRules[params.Language]
 	if !ok {
-		return nil, LanguageNotSupported
+		return nil, &LanguageNotSupportedError{params.Language}
 	}
 
 	params.Text = strings.ToLower(params.Text)
