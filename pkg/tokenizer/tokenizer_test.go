@@ -106,7 +106,7 @@ func TestTokenize(t *testing.T) {
 			},
 			expected: TokenizeOutput{
 				tokens: nil,
-				err:    LanguageNotSupported,
+				err:    &LanguageNotSupportedError{Language: "pl"},
 			},
 		},
 	}
