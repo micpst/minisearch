@@ -7,7 +7,6 @@ Restful, in-memory, full-text search engine written in Go.
 ## ✅ Features
 
 - [x] Full-text indexing of multiple fields in a document
-- [x] Boolean queries with AND, OR operators between subqueries
 - [x] Exact phrase search
 - [x] Document ranking based on BM25
 - [x] Vector similarity search for semantic search
@@ -52,10 +51,10 @@ Create a new document and add it to the index.
 ```bash
 $ curl -X POST localhost:3000/api/v1/documents \
     -H 'Content-Type: application/json' \
-    -d '{ 
-      "title": "The Silicon Brain", 
-      "url": "https://micpst.com/posts/silicon-brain", 
-      "abstract": "The human brain is often described as complex..." 
+    -d '{
+      "title": "The Silicon Brain",
+      "url": "https://micpst.com/posts/silicon-brain",
+      "abstract": "The human brain is often described as complex..."
     }'
 ```
 
@@ -88,10 +87,10 @@ Update the existing document and re-index it with the new fields.
 ```bash
 $ curl -X PUT localhost:3000/api/v1/documents/<id> \
     -H 'Content-Type: application/json' \
-    -d '{ 
-      "title": "The Silicon Brain", 
-      "url": "https://micpst.com/posts/silicon-brain", 
-      "abstract": "The human brain is often described as complex..." 
+    -d '{
+      "title": "The Silicon Brain",
+      "url": "https://micpst.com/posts/silicon-brain",
+      "abstract": "The human brain is often described as complex..."
     }'
 ```
 
@@ -185,12 +184,12 @@ $ curl -X POST localhost:3000/api/v1/search \
         // Default value: 1.2
         // Recommended value: between 1.2 and 2
         "k": 1.2,
-        
+
         // Length normalization parameter.
         // Default value: 0.75
         // Recommended value: > 0.75
         "b": 0.75,
-        
+
         // Frequency normalization lower bound.
         // Default value: 0.5
         // Recommended value: between 0.5 and 1

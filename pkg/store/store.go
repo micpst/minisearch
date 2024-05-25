@@ -1,9 +1,7 @@
 package store
 
 import (
-	"fmt"
 	"math"
-	"reflect"
 	"sort"
 	"sync"
 
@@ -51,7 +49,6 @@ type DeleteParams[S Schema] struct {
 type SearchParams struct {
 	Query      string             `json:"query" binding:"required"`
 	Properties []string           `json:"properties"`
-	BoolMode   Mode               `json:"boolMode"`
 	Exact      bool               `json:"exact"`
 	Tolerance  int                `json:"tolerance"`
 	Relevance  BM25Params         `json:"relevance"`
@@ -93,35 +90,22 @@ type Config struct {
 type MemDB[S Schema] struct {
 	mutex           sync.RWMutex
 	documents       map[string]S
-	indexes         map[string]*Index
-	indexKeys       []string
+	index           *Index[S]
 	defaultLanguage tokenizer.Language
 	tokenizerConfig *tokenizer.Config
 }
 
 func New[S Schema](c *Config) *MemDB[S] {
-	db := &MemDB[S]{
+	return &MemDB[S]{
 		documents:       make(map[string]S),
-		indexes:         make(map[string]*Index),
-		indexKeys:       make([]string, 0),
+		index:           newIndex[S](),
 		defaultLanguage: c.DefaultLanguage,
 		tokenizerConfig: c.TokenizerConfig,
-	}
-	db.buildIndexes()
-	return db
-}
-
-func (db *MemDB[S]) buildIndexes() {
-	var s S
-	for key := range flattenSchema(s) {
-		db.indexes[key] = NewIndex()
-		db.indexKeys = append(db.indexKeys, key)
 	}
 }
 
 func (db *MemDB[S]) Insert(params *InsertParams[S]) (Record[S], error) {
 	id := uuid.NewString()
-	document := flattenSchema(params.Document)
 
 	language := params.Language
 	if language == "" {
@@ -139,7 +123,14 @@ func (db *MemDB[S]) Insert(params *InsertParams[S]) (Record[S], error) {
 	}
 
 	db.documents[id] = params.Document
-	db.indexDocument(id, document, language)
+
+	db.index.Insert(&IndexParams[S]{
+		Id:              id,
+		Document:        params.Document,
+		DocsCount:       len(db.documents),
+		language:        language,
+		tokenizerConfig: db.tokenizerConfig,
+	})
 
 	return Record[S]{Id: id, Data: params.Document}, nil
 }
@@ -188,8 +179,6 @@ func (db *MemDB[S]) InsertBatch(params *InsertBatchParams[S]) []error {
 }
 
 func (db *MemDB[S]) Update(params *UpdateParams[S]) (Record[S], error) {
-	document := flattenSchema(params.Document)
-
 	language := params.Language
 	if language == "" {
 		language = db.defaultLanguage
@@ -206,11 +195,22 @@ func (db *MemDB[S]) Update(params *UpdateParams[S]) (Record[S], error) {
 		return Record[S]{}, &DocumentNotFoundError{Id: params.Id}
 	}
 
-	db.indexDocument(params.Id, document, language)
-	document = flattenSchema(oldDocument)
-	db.deindexDocument(params.Id, document, language)
-
 	db.documents[params.Id] = params.Document
+
+	db.index.Insert(&IndexParams[S]{
+		Id:              params.Id,
+		Document:        params.Document,
+		DocsCount:       len(db.documents),
+		language:        language,
+		tokenizerConfig: db.tokenizerConfig,
+	})
+	db.index.Delete(&IndexParams[S]{
+		Id:              params.Id,
+		Document:        oldDocument,
+		DocsCount:       len(db.documents),
+		language:        language,
+		tokenizerConfig: db.tokenizerConfig,
+	})
 
 	return Record[S]{Id: params.Id, Data: params.Document}, nil
 }
@@ -232,8 +232,13 @@ func (db *MemDB[S]) Delete(params *DeleteParams[S]) error {
 		return &DocumentNotFoundError{Id: params.Id}
 	}
 
-	doc := flattenSchema(document)
-	db.deindexDocument(params.Id, doc, language)
+	db.index.Delete(&IndexParams[S]{
+		Id:              params.Id,
+		Document:        document,
+		DocsCount:       len(db.documents),
+		language:        language,
+		tokenizerConfig: db.tokenizerConfig,
+	})
 
 	delete(db.documents, params.Id)
 
@@ -246,7 +251,7 @@ func (db *MemDB[S]) Search(params *SearchParams) (SearchResult[S], error) {
 
 	properties := params.Properties
 	if len(params.Properties) == 0 {
-		properties = db.indexKeys
+		properties = db.index.searchableProperties
 	}
 
 	language := params.Language
@@ -267,10 +272,10 @@ func (db *MemDB[S]) Search(params *SearchParams) (SearchResult[S], error) {
 	defer db.mutex.RUnlock()
 
 	for _, prop := range properties {
-		if index, ok := db.indexes[prop]; ok {
-			idScores := index.Find(&FindParams{
-				Tokens:    tokens,
-				BoolMode:  params.BoolMode,
+		for _, token := range tokens {
+			idScores := db.index.Find(&FindParams{
+				Term:      token,
+				Property:  prop,
 				Exact:     params.Exact,
 				Tolerance: params.Tolerance,
 				Relevance: params.Relevance,
@@ -297,61 +302,4 @@ func (db *MemDB[S]) Search(params *SearchParams) (SearchResult[S], error) {
 	start, stop := lib.Paginate(params.Offset, params.Limit, len(results))
 
 	return SearchResult[S]{Hits: results[start:stop], Count: len(results)}, nil
-}
-
-func (db *MemDB[S]) indexDocument(id string, document map[string]string, language tokenizer.Language) {
-	for propName, index := range db.indexes {
-		tokens, _ := tokenizer.Tokenize(&tokenizer.TokenizeParams{
-			Text:            document[propName],
-			Language:        language,
-			AllowDuplicates: true,
-		}, db.tokenizerConfig)
-
-		index.Insert(&IndexParams{
-			Id:        id,
-			Tokens:    tokens,
-			DocsCount: len(db.documents),
-		})
-	}
-}
-
-func (db *MemDB[S]) deindexDocument(id string, document map[string]string, language tokenizer.Language) {
-	for propName, index := range db.indexes {
-		tokens, _ := tokenizer.Tokenize(&tokenizer.TokenizeParams{
-			Text:            document[propName],
-			Language:        language,
-			AllowDuplicates: false,
-		}, db.tokenizerConfig)
-
-		index.Delete(&IndexParams{
-			Id:        id,
-			Tokens:    tokens,
-			DocsCount: len(db.documents),
-		})
-	}
-}
-
-func flattenSchema(obj any, prefix ...string) map[string]string {
-	m := make(map[string]string)
-	t := reflect.TypeOf(obj)
-	v := reflect.ValueOf(obj)
-	fields := reflect.VisibleFields(t)
-
-	for i, field := range fields {
-		if propName, ok := field.Tag.Lookup("index"); ok {
-			if len(prefix) == 1 {
-				propName = fmt.Sprintf("%s.%s", prefix[0], propName)
-			}
-
-			if field.Type.Kind() == reflect.Struct {
-				for key, value := range flattenSchema(v.Field(i).Interface(), propName) {
-					m[key] = value
-				}
-			} else {
-				m[propName] = v.Field(i).String()
-			}
-		}
-	}
-
-	return m
 }

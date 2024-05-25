@@ -137,7 +137,6 @@ func (s *Server) deleteDocument(c *gin.Context) {
 func (s *Server) searchDocuments(c *gin.Context) {
 	params := store.SearchParams{
 		Properties: []string{},
-		BoolMode:   store.AND,
 		Limit:      10,
 		Relevance: store.BM25Params{
 			K: 1.2,
