@@ -9,24 +9,24 @@ import (
 	"github.com/micpst/minisearch/pkg/tokenizer"
 )
 
-type FindParams struct {
-	Term      string
-	Property  string
-	Exact     bool
-	Tolerance int
-	Relevance BM25Params
-	DocsCount int
+type findParams struct {
+	term      string
+	property  string
+	exact     bool
+	tolerance int
+	relevance BM25Params
+	docsCount int
 }
 
-type IndexParams[S Schema] struct {
-	Id              string
-	Document        S
-	DocsCount       int
+type indexParams[S Schema] struct {
+	id              string
+	document        S
+	docsCount       int
 	language        tokenizer.Language
 	tokenizerConfig *tokenizer.Config
 }
 
-type Index[S Schema] struct {
+type index[S Schema] struct {
 	indexes              map[string]*radix.Trie
 	searchableProperties []string
 	avgFieldLength       map[string]float64
@@ -34,8 +34,8 @@ type Index[S Schema] struct {
 	tokenOccurrences     map[string]map[string]int
 }
 
-func newIndex[S Schema]() *Index[S] {
-	idx := &Index[S]{
+func newIndex[S Schema]() *index[S] {
+	idx := &index[S]{
 		indexes:              make(map[string]*radix.Trie),
 		searchableProperties: make([]string, 0),
 		avgFieldLength:       make(map[string]float64),
@@ -46,7 +46,7 @@ func newIndex[S Schema]() *Index[S] {
 	return idx
 }
 
-func (idx *Index[S]) build() {
+func (idx *index[S]) build() {
 	var s S
 	for key, value := range flattenSchema(s) {
 		switch value.(type) {
@@ -61,8 +61,8 @@ func (idx *Index[S]) build() {
 	}
 }
 
-func (idx *Index[S]) Insert(params *IndexParams[S]) {
-	document := flattenSchema(params.Document)
+func (idx *index[S]) insert(params *indexParams[S]) {
+	document := flattenSchema(params.document)
 
 	for propName, index := range idx.indexes {
 		tokens, _ := tokenizer.Tokenize(&tokenizer.TokenizeParams{
@@ -77,20 +77,20 @@ func (idx *Index[S]) Insert(params *IndexParams[S]) {
 		for token, count := range tokensCount {
 			tokenFrequency := float64(count) / allTokensCount
 			index.Insert(&radix.InsertParams{
-				Id:            params.Id,
+				Id:            params.id,
 				Word:          token,
 				TermFrequency: tokenFrequency,
 			})
 			idx.tokenOccurrences[propName][token]++
 		}
 
-		idx.avgFieldLength[propName] = (idx.avgFieldLength[propName]*float64(params.DocsCount-1) + allTokensCount) / float64(params.DocsCount)
-		idx.fieldLengths[propName][params.Id] = int(allTokensCount)
+		idx.avgFieldLength[propName] = (idx.avgFieldLength[propName]*float64(params.docsCount-1) + allTokensCount) / float64(params.docsCount)
+		idx.fieldLengths[propName][params.id] = int(allTokensCount)
 	}
 }
 
-func (idx *Index[S]) Delete(params *IndexParams[S]) {
-	document := flattenSchema(params.Document)
+func (idx *index[S]) delete(params *indexParams[S]) {
+	document := flattenSchema(params.document)
 
 	for propName, index := range idx.indexes {
 		tokens, _ := tokenizer.Tokenize(&tokenizer.TokenizeParams{
@@ -101,7 +101,7 @@ func (idx *Index[S]) Delete(params *IndexParams[S]) {
 
 		for _, token := range tokens {
 			index.Delete(&radix.DeleteParams{
-				Id:   params.Id,
+				Id:   params.id,
 				Word: token,
 			})
 			idx.tokenOccurrences[propName][token]--
@@ -110,30 +110,30 @@ func (idx *Index[S]) Delete(params *IndexParams[S]) {
 			}
 		}
 
-		idx.avgFieldLength[propName] = (idx.avgFieldLength[propName]*float64(params.DocsCount) - float64(len(tokens))) / float64(params.DocsCount-1)
-		delete(idx.fieldLengths[propName], params.Id)
+		idx.avgFieldLength[propName] = (idx.avgFieldLength[propName]*float64(params.docsCount) - float64(len(tokens))) / float64(params.docsCount-1)
+		delete(idx.fieldLengths[propName], params.id)
 	}
 }
 
-func (idx *Index[S]) Find(params *FindParams) map[string]float64 {
+func (idx *index[S]) find(params *findParams) map[string]float64 {
 	idScores := make(map[string]float64)
 
-	if index, ok := idx.indexes[params.Property]; ok {
+	if index, ok := idx.indexes[params.property]; ok {
 		infos := index.Find(&radix.FindParams{
-			Term:      params.Term,
-			Tolerance: params.Tolerance,
-			Exact:     params.Exact,
+			Term:      params.term,
+			Tolerance: params.tolerance,
+			Exact:     params.exact,
 		})
 		for _, info := range infos {
 			idScores[info.Id] = lib.BM25(
 				info.TermFrequency,
-				idx.tokenOccurrences[params.Property][params.Term],
-				idx.fieldLengths[params.Property][info.Id],
-				idx.avgFieldLength[params.Property],
-				params.DocsCount,
-				params.Relevance.K,
-				params.Relevance.B,
-				params.Relevance.D,
+				idx.tokenOccurrences[params.property][params.term],
+				idx.fieldLengths[params.property][info.Id],
+				idx.avgFieldLength[params.property],
+				params.docsCount,
+				params.relevance.K,
+				params.relevance.B,
+				params.relevance.D,
 			)
 		}
 	}

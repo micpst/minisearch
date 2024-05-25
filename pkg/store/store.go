@@ -90,7 +90,7 @@ type Config struct {
 type MemDB[S Schema] struct {
 	mutex           sync.RWMutex
 	documents       map[string]S
-	index           *Index[S]
+	index           *index[S]
 	defaultLanguage tokenizer.Language
 	tokenizerConfig *tokenizer.Config
 }
@@ -124,10 +124,10 @@ func (db *MemDB[S]) Insert(params *InsertParams[S]) (Record[S], error) {
 
 	db.documents[id] = params.Document
 
-	db.index.Insert(&IndexParams[S]{
-		Id:              id,
-		Document:        params.Document,
-		DocsCount:       len(db.documents),
+	db.index.insert(&indexParams[S]{
+		id:              id,
+		document:        params.Document,
+		docsCount:       len(db.documents),
 		language:        language,
 		tokenizerConfig: db.tokenizerConfig,
 	})
@@ -197,17 +197,17 @@ func (db *MemDB[S]) Update(params *UpdateParams[S]) (Record[S], error) {
 
 	db.documents[params.Id] = params.Document
 
-	db.index.Insert(&IndexParams[S]{
-		Id:              params.Id,
-		Document:        params.Document,
-		DocsCount:       len(db.documents),
+	db.index.insert(&indexParams[S]{
+		id:              params.Id,
+		document:        params.Document,
+		docsCount:       len(db.documents),
 		language:        language,
 		tokenizerConfig: db.tokenizerConfig,
 	})
-	db.index.Delete(&IndexParams[S]{
-		Id:              params.Id,
-		Document:        oldDocument,
-		DocsCount:       len(db.documents),
+	db.index.delete(&indexParams[S]{
+		id:              params.Id,
+		document:        oldDocument,
+		docsCount:       len(db.documents),
 		language:        language,
 		tokenizerConfig: db.tokenizerConfig,
 	})
@@ -232,10 +232,10 @@ func (db *MemDB[S]) Delete(params *DeleteParams[S]) error {
 		return &DocumentNotFoundError{Id: params.Id}
 	}
 
-	db.index.Delete(&IndexParams[S]{
-		Id:              params.Id,
-		Document:        document,
-		DocsCount:       len(db.documents),
+	db.index.delete(&indexParams[S]{
+		id:              params.Id,
+		document:        document,
+		docsCount:       len(db.documents),
 		language:        language,
 		tokenizerConfig: db.tokenizerConfig,
 	})
@@ -273,13 +273,13 @@ func (db *MemDB[S]) Search(params *SearchParams) (SearchResult[S], error) {
 
 	for _, prop := range properties {
 		for _, token := range tokens {
-			idScores := db.index.Find(&FindParams{
-				Term:      token,
-				Property:  prop,
-				Exact:     params.Exact,
-				Tolerance: params.Tolerance,
-				Relevance: params.Relevance,
-				DocsCount: len(db.documents),
+			idScores := db.index.find(&findParams{
+				term:      token,
+				property:  prop,
+				exact:     params.Exact,
+				tolerance: params.Tolerance,
+				relevance: params.Relevance,
+				docsCount: len(db.documents),
 			})
 			for id, score := range idScores {
 				allIdScores[id] += score
