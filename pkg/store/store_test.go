@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"log"
 	"testing"
 
 	"github.com/micpst/minisearch/pkg/tokenizer"
@@ -94,11 +95,11 @@ func TestInsert(t *testing.T) {
 			assert.Equal(t, c.given.Document, v.Data)
 
 			assert.Equal(t, 1, len(db.documents))
-			assert.Equal(t, len(c.expected), len(db.indexes))
+			assert.Equal(t, len(c.expected), len(db.index.indexes))
 
-			for prop, index := range db.indexes {
-				assert.Equal(t, c.expected[prop].length, index.data.Len())
-				assert.Equal(t, c.expected[prop].occurrences, len(index.tokenOccurrences))
+			for prop, index := range db.index.indexes {
+				assert.Equal(t, c.expected[prop].length, index.Len())
+				assert.Equal(t, c.expected[prop].occurrences, len(db.index.tokenOccurrences[prop]))
 			}
 		})
 	}
@@ -134,11 +135,11 @@ func TestInsertBatch(t *testing.T) {
 			db.InsertBatch(&c.given)
 
 			assert.Equal(t, len(c.given.Documents), len(db.documents))
-			assert.Equal(t, len(c.expected), len(db.indexes))
+			assert.Equal(t, len(c.expected), len(db.index.indexes))
 
-			for prop, index := range db.indexes {
-				assert.Equal(t, c.expected[prop].length, index.data.Len())
-				assert.Equal(t, c.expected[prop].occurrences, len(index.tokenOccurrences))
+			for prop, index := range db.index.indexes {
+				assert.Equal(t, c.expected[prop].length, index.Len())
+				assert.Equal(t, c.expected[prop].occurrences, len(db.index.tokenOccurrences[prop]))
 			}
 		})
 	}
@@ -160,16 +161,19 @@ func TestSearch(t *testing.T) {
 			given: SearchParams{
 				Query:      "charlie davis",
 				Properties: []string{"name"},
-				BoolMode:   AND,
 				Offset:     0,
 				Limit:      10,
 			},
 			expected: SearchResult[User]{
-				Count: 1,
+				Count: 2,
 				Hits: []SearchHit[User]{
 					{
 						Data:  testData[3],
 						Score: 3.4740347056144216,
+					},
+					{
+						Data:  testData[5],
+						Score: 1.4816045409242156,
 					},
 				},
 			},
@@ -178,7 +182,6 @@ func TestSearch(t *testing.T) {
 			given: SearchParams{
 				Query:      "julia tom",
 				Properties: []string{"name", "email"},
-				BoolMode:   OR,
 				Offset:     0,
 				Limit:      10,
 			},
@@ -204,7 +207,7 @@ func TestSearch(t *testing.T) {
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%v", c.given), func(t *testing.T) {
 			actual, _ := db.Search(&c.given)
-
+			log.Println(actual)
 			assert.Equal(t, c.expected.Count, actual.Count)
 
 			for i, hit := range c.expected.Hits {
@@ -216,14 +219,14 @@ func TestSearch(t *testing.T) {
 }
 
 func TestFlattenSchema(t *testing.T) {
-	cases := []TestCase[any, map[string]string]{
+	cases := []TestCase[any, map[string]any]{
 		{
 			given: User{
 				Name:   "micpst",
 				Email:  "micpst@email.com",
 				Joined: "2023-02-10T15:04:05Z07:00",
 			},
-			expected: map[string]string{
+			expected: map[string]any{
 				"name":  "micpst",
 				"email": "micpst@email.com",
 			},
@@ -239,7 +242,7 @@ func TestFlattenSchema(t *testing.T) {
 					Joined: "2023-02-10T15:04:05Z07:00",
 				},
 			},
-			expected: map[string]string{
+			expected: map[string]any{
 				"title":        "The Silicon Brain",
 				"abstract":     "The human brain is often described as complex and while this is certainly true in many ways, its computational substrate is quite easy to understand.",
 				"author.name":  "micpst",
