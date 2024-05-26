@@ -4,14 +4,17 @@ import (
 	"github.com/micpst/minisearch/pkg/lib"
 )
 
-type InsertParams struct {
-	Id            string
-	Word          string
-	TermFrequency float64
+type Key comparable
+type Value any
+
+type InsertParams[K Key, V Value] struct {
+	Id   K
+	Word string
+	Data V
 }
 
-type DeleteParams struct {
-	Id   string
+type DeleteParams[K Key] struct {
+	Id   K
 	Word string
 }
 
@@ -21,25 +24,26 @@ type FindParams struct {
 	Exact     bool
 }
 
-type Trie struct {
-	root   *node
+type FindResult[V Value] struct {
+	Id   string
+	Data V
+}
+
+type Trie[K Key, V Value] struct {
+	root   *node[K, V]
 	length int
 }
 
-func New() *Trie {
-	return &Trie{root: newNode(nil)}
+func New[K Key, V Value]() *Trie[K, V] {
+	return &Trie[K, V]{root: newNode[K, V](nil)}
 }
 
-func (t *Trie) Len() int {
+func (t *Trie[K, V]) Len() int {
 	return t.length
 }
 
-func (t *Trie) Insert(params *InsertParams) {
+func (t *Trie[K, V]) Insert(params *InsertParams[K, V]) {
 	word := []rune(params.Word)
-	newInfo := RecordInfo{
-		Id:            params.Id,
-		TermFrequency: params.TermFrequency,
-	}
 	currNode := t.root
 
 	for i := 0; i < len(word); {
@@ -53,14 +57,14 @@ func (t *Trie) Insert(params *InsertParams) {
 
 			// the wordAtIndex matches exactly with an existing child node
 			if commonPrefixLength == wordLength && commonPrefixLength == subwordLength {
-				currChild.addRecordInfo(newInfo)
+				currChild.addData(params.Id, params.Data)
 				return
 			}
 
 			// the wordAtIndex is completely contained in the child node subword
 			if commonPrefixLength == wordLength && commonPrefixLength < subwordLength {
-				n := newNode(wordAtIndex)
-				n.addRecordInfo(newInfo)
+				n := newNode[K, V](wordAtIndex)
+				n.addData(params.Id, params.Data)
 
 				currChild.subword = currChild.subword[commonPrefixLength:]
 				n.addChild(currChild)
@@ -72,10 +76,10 @@ func (t *Trie) Insert(params *InsertParams) {
 
 			// the wordAtIndex is partially contained in the child node subword
 			if commonPrefixLength < wordLength && commonPrefixLength < subwordLength {
-				n := newNode(wordAtIndex[commonPrefixLength:])
-				n.addRecordInfo(newInfo)
+				n := newNode[K, V](wordAtIndex[commonPrefixLength:])
+				n.addData(params.Id, params.Data)
 
-				inBetweenNode := newNode(wordAtIndex[:commonPrefixLength])
+				inBetweenNode := newNode[K, V](wordAtIndex[:commonPrefixLength])
 				currNode.addChild(inBetweenNode)
 
 				currChild.subword = currChild.subword[commonPrefixLength:]
@@ -93,8 +97,8 @@ func (t *Trie) Insert(params *InsertParams) {
 			currNode = currChild
 		} else {
 			// if the node for the curr character doesn't exist create a new child node
-			n := newNode(wordAtIndex)
-			n.addRecordInfo(newInfo)
+			n := newNode[K, V](wordAtIndex)
+			n.addData(params.Id, params.Data)
 
 			currNode.addChild(n)
 			t.length++
@@ -103,7 +107,7 @@ func (t *Trie) Insert(params *InsertParams) {
 	}
 }
 
-func (t *Trie) Delete(params *DeleteParams) {
+func (t *Trie[K, V]) Delete(params *DeleteParams[K]) {
 	word := []rune(params.Word)
 	currNode := t.root
 
@@ -113,9 +117,9 @@ func (t *Trie) Delete(params *DeleteParams) {
 
 		if currChild, ok := currNode.children[char]; ok {
 			if _, eq := lib.CommonPrefix(currChild.subword, wordAtIndex); eq {
-				currChild.removeRecordInfo(params.Id)
+				currChild.removeData(params.Id)
 
-				if len(currChild.infos) == 0 {
+				if len(currChild.data) == 0 {
 					switch len(currChild.children) {
 					case 0:
 						// if the node to be deleted has no children, delete it
@@ -124,7 +128,7 @@ func (t *Trie) Delete(params *DeleteParams) {
 					case 1:
 						// if the node to be deleted has one child, promote it to the parent node
 						for _, child := range currChild.children {
-							mergeNodes(currChild, child)
+							currChild.mergeNode(child)
 						}
 						t.length--
 					}
@@ -144,7 +148,7 @@ func (t *Trie) Delete(params *DeleteParams) {
 	}
 }
 
-func (t *Trie) Find(params *FindParams) []RecordInfo {
+func (t *Trie[K, V]) Find(params *FindParams) map[K]V {
 	term := []rune(params.Term)
 	currNode := t.root
 	currNodeWord := currNode.subword
@@ -165,7 +169,7 @@ func (t *Trie) Find(params *FindParams) []RecordInfo {
 				if params.Tolerance > 0 {
 					break
 				}
-				return []RecordInfo{}
+				return map[K]V{}
 			}
 
 			// skip to the next divergent character
@@ -178,9 +182,9 @@ func (t *Trie) Find(params *FindParams) []RecordInfo {
 			currNodeWord = append(currNodeWord, currChild.subword...)
 		} else {
 			// if the node for the curr character doesn't exist abort the deletion
-			return []RecordInfo{}
+			return map[K]V{}
 		}
 	}
 
-	return findAllRecordInfos(currNode, currNodeWord, term, params.Tolerance, params.Exact)
+	return currNode.findData(currNodeWord, term, params.Tolerance, params.Exact)
 }

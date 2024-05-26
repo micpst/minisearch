@@ -1,75 +1,51 @@
 package radix
 
 import (
-	"log"
-	"sort"
+	"maps"
 
 	"github.com/micpst/minisearch/pkg/lib"
 )
 
-type RecordInfo struct {
-	Id            string
-	TermFrequency float64
-}
-
-type node struct {
+type node[K Key, V Value] struct {
 	subword  []rune
-	children map[rune]*node
-	infos    []RecordInfo
+	children map[rune]*node[K, V]
+	data     map[K]V
 }
 
-func newNode(subword []rune) *node {
-	return &node{
+func newNode[K Key, V Value](subword []rune) *node[K, V] {
+	return &node[K, V]{
 		subword:  subword,
-		children: make(map[rune]*node),
-		infos:    make([]RecordInfo, 0),
+		children: make(map[rune]*node[K, V]),
+		data:     make(map[K]V),
 	}
 }
 
-func (n *node) addChild(child *node) {
+func (n *node[K, V]) addChild(child *node[K, V]) {
 	if len(child.subword) > 0 {
 		n.children[child.subword[0]] = child
 	}
 }
 
-func (n *node) removeChild(child *node) {
+func (n *node[K, V]) removeChild(child *node[K, V]) {
 	if len(child.subword) > 0 {
 		delete(n.children, child.subword[0])
 	}
 }
 
-func (n *node) addRecordInfo(info RecordInfo) {
-	num := len(n.infos)
-	idx := sort.Search(num, func(i int) bool {
-		return n.infos[i].Id >= info.Id
-	})
-
-	n.infos = append(n.infos, RecordInfo{})
-	copy(n.infos[idx+1:], n.infos[idx:])
-	n.infos[idx] = info
+func (n *node[K, V]) addData(id K, data V) {
+	n.data[id] = data
 }
 
-func (n *node) removeRecordInfo(id string) bool {
-	num := len(n.infos)
-	idx := sort.Search(num, func(i int) bool {
-		return n.infos[i].Id >= id
-	})
-
-	if idx < num && n.infos[idx].Id == id {
-		copy(n.infos[idx:], n.infos[idx+1:])
-		n.infos[len(n.infos)-1] = RecordInfo{}
-		n.infos = n.infos[:len(n.infos)-1]
-		return true
-	}
-	return false
+func (n *node[K, V]) removeData(id K) {
+	delete(n.data, id)
 }
 
-func findAllRecordInfos(n *node, word []rune, term []rune, tolerance int, exact bool) []RecordInfo {
-	var results []RecordInfo
+func (n *node[K, V]) findData(word []rune, term []rune, tolerance int, exact bool) map[K]V {
+	results := make(map[K]V)
 	stack := [][2]interface{}{{n, word}}
 
 	for len(stack) > 0 {
-		currNode, currWord := stack[len(stack)-1][0].(*node), stack[len(stack)-1][1].([]rune)
+		currNode, currWord := stack[len(stack)-1][0].(*node[K, V]), stack[len(stack)-1][1].([]rune)
 		stack = stack[:len(stack)-1]
 
 		if _, eq := lib.CommonPrefix(currWord, term); !eq && exact {
@@ -77,12 +53,11 @@ func findAllRecordInfos(n *node, word []rune, term []rune, tolerance int, exact 
 		}
 
 		if tolerance > 0 {
-			log.Println(string(currWord), string(term), tolerance)
 			if _, isBounded := lib.BoundedLevenshtein(currWord, term, tolerance); isBounded {
-				results = append(results, currNode.infos...)
+				maps.Copy(results, currNode.data)
 			}
 		} else {
-			results = append(results, currNode.infos...)
+			maps.Copy(results, currNode.data)
 		}
 
 		for _, child := range currNode.children {
@@ -93,8 +68,8 @@ func findAllRecordInfos(n *node, word []rune, term []rune, tolerance int, exact 
 	return results
 }
 
-func mergeNodes(a *node, b *node) {
-	a.subword = append(a.subword, b.subword...)
-	a.infos = b.infos
-	a.children = b.children
+func (n *node[K, V]) mergeNode(other *node[K, V]) {
+	n.subword = append(n.subword, other.subword...)
+	n.data = other.data
+	n.children = other.children
 }
