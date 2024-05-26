@@ -90,7 +90,7 @@ type Config struct {
 type MemDB[S Schema] struct {
 	mutex           sync.RWMutex
 	documents       map[string]S
-	index           *index[S]
+	index           *index[string, S]
 	defaultLanguage tokenizer.Language
 	tokenizerConfig *tokenizer.Config
 }
@@ -98,7 +98,7 @@ type MemDB[S Schema] struct {
 func New[S Schema](c *Config) *MemDB[S] {
 	return &MemDB[S]{
 		documents:       make(map[string]S),
-		index:           newIndex[S](),
+		index:           newIndex[string, S](),
 		defaultLanguage: c.DefaultLanguage,
 		tokenizerConfig: c.TokenizerConfig,
 	}
@@ -124,7 +124,7 @@ func (db *MemDB[S]) Insert(params *InsertParams[S]) (Record[S], error) {
 
 	db.documents[id] = params.Document
 
-	db.index.insert(&indexParams[S]{
+	db.index.insert(&indexParams[string, S]{
 		id:              id,
 		document:        params.Document,
 		docsCount:       len(db.documents),
@@ -197,14 +197,14 @@ func (db *MemDB[S]) Update(params *UpdateParams[S]) (Record[S], error) {
 
 	db.documents[params.Id] = params.Document
 
-	db.index.insert(&indexParams[S]{
+	db.index.insert(&indexParams[string, S]{
 		id:              params.Id,
 		document:        params.Document,
 		docsCount:       len(db.documents),
 		language:        language,
 		tokenizerConfig: db.tokenizerConfig,
 	})
-	db.index.delete(&indexParams[S]{
+	db.index.delete(&indexParams[string, S]{
 		id:              params.Id,
 		document:        oldDocument,
 		docsCount:       len(db.documents),
@@ -232,7 +232,7 @@ func (db *MemDB[S]) Delete(params *DeleteParams[S]) error {
 		return &DocumentNotFoundError{Id: params.Id}
 	}
 
-	db.index.delete(&indexParams[S]{
+	db.index.delete(&indexParams[string, S]{
 		id:              params.Id,
 		document:        document,
 		docsCount:       len(db.documents),

@@ -9,6 +9,12 @@ import (
 	"github.com/micpst/minisearch/pkg/tokenizer"
 )
 
+type recordId comparable
+
+type recordInfo struct {
+	termFrequency float64
+}
+
 type findParams struct {
 	term      string
 	property  string
@@ -18,41 +24,41 @@ type findParams struct {
 	docsCount int
 }
 
-type indexParams[S Schema] struct {
-	id              string
+type indexParams[K recordId, S Schema] struct {
+	id              K
 	document        S
 	docsCount       int
 	language        tokenizer.Language
 	tokenizerConfig *tokenizer.Config
 }
 
-type index[S Schema] struct {
-	indexes              map[string]*radix.Trie
+type index[K recordId, S Schema] struct {
+	indexes              map[string]*radix.Trie[K, recordInfo]
 	searchableProperties []string
 	avgFieldLength       map[string]float64
-	fieldLengths         map[string]map[string]int
+	fieldLengths         map[string]map[K]int
 	tokenOccurrences     map[string]map[string]int
 }
 
-func newIndex[S Schema]() *index[S] {
-	idx := &index[S]{
-		indexes:              make(map[string]*radix.Trie),
+func newIndex[K recordId, S Schema]() *index[K, S] {
+	idx := &index[K, S]{
+		indexes:              make(map[string]*radix.Trie[K, recordInfo]),
 		searchableProperties: make([]string, 0),
 		avgFieldLength:       make(map[string]float64),
-		fieldLengths:         make(map[string]map[string]int),
+		fieldLengths:         make(map[string]map[K]int),
 		tokenOccurrences:     make(map[string]map[string]int),
 	}
 	idx.build()
 	return idx
 }
 
-func (idx *index[S]) build() {
+func (idx *index[K, S]) build() {
 	var s S
 	for key, value := range flattenSchema(s) {
 		switch value.(type) {
 		case string:
-			idx.indexes[key] = radix.New()
-			idx.fieldLengths[key] = make(map[string]int)
+			idx.indexes[key] = radix.New[K, recordInfo]()
+			idx.fieldLengths[key] = make(map[K]int)
 			idx.tokenOccurrences[key] = make(map[string]int)
 			idx.searchableProperties = append(idx.searchableProperties, key)
 		default:
@@ -61,7 +67,7 @@ func (idx *index[S]) build() {
 	}
 }
 
-func (idx *index[S]) insert(params *indexParams[S]) {
+func (idx *index[K, S]) insert(params *indexParams[K, S]) {
 	document := flattenSchema(params.document)
 
 	for propName, index := range idx.indexes {
@@ -76,10 +82,10 @@ func (idx *index[S]) insert(params *indexParams[S]) {
 
 		for token, count := range tokensCount {
 			tokenFrequency := float64(count) / allTokensCount
-			index.Insert(&radix.InsertParams{
-				Id:            params.id,
-				Word:          token,
-				TermFrequency: tokenFrequency,
+			index.Insert(&radix.InsertParams[K, recordInfo]{
+				Id:   params.id,
+				Word: token,
+				Data: recordInfo{termFrequency: tokenFrequency},
 			})
 			idx.tokenOccurrences[propName][token]++
 		}
@@ -89,7 +95,7 @@ func (idx *index[S]) insert(params *indexParams[S]) {
 	}
 }
 
-func (idx *index[S]) delete(params *indexParams[S]) {
+func (idx *index[K, S]) delete(params *indexParams[K, S]) {
 	document := flattenSchema(params.document)
 
 	for propName, index := range idx.indexes {
@@ -100,7 +106,7 @@ func (idx *index[S]) delete(params *indexParams[S]) {
 		}, params.tokenizerConfig)
 
 		for _, token := range tokens {
-			index.Delete(&radix.DeleteParams{
+			index.Delete(&radix.DeleteParams[K]{
 				Id:   params.id,
 				Word: token,
 			})
@@ -115,20 +121,20 @@ func (idx *index[S]) delete(params *indexParams[S]) {
 	}
 }
 
-func (idx *index[S]) find(params *findParams) map[string]float64 {
-	idScores := make(map[string]float64)
+func (idx *index[K, S]) find(params *findParams) map[K]float64 {
+	idScores := make(map[K]float64)
 
 	if index, ok := idx.indexes[params.property]; ok {
-		infos := index.Find(&radix.FindParams{
+		records := index.Find(&radix.FindParams{
 			Term:      params.term,
 			Tolerance: params.tolerance,
 			Exact:     params.exact,
 		})
-		for _, info := range infos {
-			idScores[info.Id] = lib.BM25(
-				info.TermFrequency,
+		for id, data := range records {
+			idScores[id] = lib.BM25(
+				data.termFrequency,
 				idx.tokenOccurrences[params.property][params.term],
-				idx.fieldLengths[params.property][info.Id],
+				idx.fieldLengths[params.property][id],
 				idx.avgFieldLength[params.property],
 				params.docsCount,
 				params.relevance.K,
