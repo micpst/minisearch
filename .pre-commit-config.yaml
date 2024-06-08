@@ -3,11 +3,17 @@ repos:
     rev: v4.5.0
     hooks:
       - id: check-merge-conflict
+        exclude: (vendor/.*)
       - id: check-toml
+        exclude: (vendor/.*)
       - id: check-yaml
+        exclude: (vendor/.*)
       - id: end-of-file-fixer
+        exclude: (vendor/.*)
       - id: mixed-line-ending
+        exclude: (vendor/.*)
       - id: trailing-whitespace
+        exclude: (vendor/.*)
 
   - repo: local
     hooks:
