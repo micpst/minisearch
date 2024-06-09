@@ -110,16 +110,17 @@ func (s *Server) createDocument(c *gin.Context) {
 		Language: tokenizer.Language(strings.ToLower(c.Query("lang"))),
 	})
 
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Message: err.Error(),
-		})
-	} else {
+	switch err.(type) {
+	case nil:
 		c.JSON(http.StatusCreated, DocumentResponse{
 			Id:       doc.Id,
 			Title:    doc.Data.Title,
 			Url:      doc.Data.Url,
 			Abstract: doc.Data.Abstract,
+		})
+	default:
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Message: err.Error(),
 		})
 	}
 }
@@ -201,15 +202,16 @@ func (s *Server) searchDocuments(c *gin.Context) {
 	})
 	elapsed := time.Since(start)
 
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Message: err.Error(),
-		})
-	} else {
+	switch err.(type) {
+	case nil:
 		c.JSON(http.StatusOK, SearchDocumentResponse{
 			Count:   result.Count,
 			Hits:    *(*[]SearchDocument)(unsafe.Pointer(&result.Hits)),
 			Elapsed: elapsed.Microseconds(),
+		})
+	default:
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Message: err.Error(),
 		})
 	}
 }
