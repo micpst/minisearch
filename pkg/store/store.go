@@ -10,13 +10,6 @@ import (
 	"github.com/micpst/minisearch/pkg/tokenizer"
 )
 
-const (
-	AND Mode = "AND"
-	OR  Mode = "OR"
-)
-
-type Mode string
-
 type Schema any
 
 type Record[S Schema] struct {
@@ -47,20 +40,20 @@ type DeleteParams[S Schema] struct {
 }
 
 type SearchParams struct {
-	Query      string             `json:"query" binding:"required"`
-	Properties []string           `json:"properties"`
-	Exact      bool               `json:"exact"`
-	Tolerance  int                `json:"tolerance"`
-	Relevance  BM25Params         `json:"relevance"`
-	Offset     int                `json:"offset"`
-	Limit      int                `json:"limit"`
-	Language   tokenizer.Language `json:"lang"`
+	Query      string
+	Properties []string
+	Exact      bool
+	Tolerance  int
+	Relevance  BM25Params
+	Offset     int
+	Limit      int
+	Language   tokenizer.Language
 }
 
 type BM25Params struct {
-	K float64 `json:"k"`
-	B float64 `json:"b"`
-	D float64 `json:"d"`
+	K float64
+	B float64
+	D float64
 }
 
 type SearchResult[S Schema] struct {
@@ -273,7 +266,7 @@ func (db *MemDB[S]) Search(params *SearchParams) (SearchResult[S], error) {
 
 	for _, prop := range properties {
 		for _, token := range tokens {
-			idScores := db.index.find(&findParams{
+			idScores, err := db.index.find(&findParams{
 				term:      token,
 				property:  prop,
 				exact:     params.Exact,
@@ -281,6 +274,9 @@ func (db *MemDB[S]) Search(params *SearchParams) (SearchResult[S], error) {
 				relevance: params.Relevance,
 				docsCount: len(db.documents),
 			})
+			if err != nil {
+				return SearchResult[S]{}, err
+			}
 			for id, score := range idScores {
 				allIdScores[id] += score
 			}
