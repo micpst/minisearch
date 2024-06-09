@@ -7,5 +7,5 @@ type LanguageNotSupportedError struct {
 }
 
 func (e *LanguageNotSupportedError) Error() string {
-	return fmt.Sprintf("Language %s is not supported", e.Language)
+	return fmt.Sprintf("Language '%s' is not supported", e.Language)
 }

@@ -14,6 +14,23 @@ import (
 	"github.com/micpst/minisearch/pkg/tokenizer"
 )
 
+type SearchRequest struct {
+	Query      string             `json:"query" binding:"required"`
+	Properties []string           `json:"properties"`
+	Exact      bool               `json:"exact"`
+	Tolerance  int                `json:"tolerance"`
+	Relevance  BM25Params         `json:"relevance"`
+	Offset     int                `json:"offset"`
+	Limit      int                `json:"limit"`
+	Language   tokenizer.Language `json:"lang"`
+}
+
+type BM25Params struct {
+	K float64 `json:"k"`
+	B float64 `json:"b"`
+	D float64 `json:"d"`
+}
+
 type DocumentResponse struct {
 	Id       string `json:"id"`
 	Title    string `json:"title"`
@@ -31,6 +48,10 @@ type SearchDocumentResponse struct {
 	Count   int              `json:"count"`
 	Hits    []SearchDocument `json:"hits"`
 	Elapsed int64            `json:"elapsed"`
+}
+
+type ErrorResponse struct {
+	Message string `json:"message"`
 }
 
 type UploadDocumentsResponse struct {
@@ -61,12 +82,11 @@ func (s *Server) uploadDocuments(c *gin.Context) {
 			return
 		}
 
-		params := store.InsertBatchParams[Document]{
+		errs := s.db.InsertBatch(&store.InsertBatchParams[Document]{
 			Documents: dump.Documents,
 			BatchSize: 10000,
 			Language:  tokenizer.Language(strings.ToLower(c.Query("lang"))),
-		}
-		errs := s.db.InsertBatch(&params)
+		})
 
 		total += len(dump.Documents)
 		failed += len(errs)
@@ -85,18 +105,24 @@ func (s *Server) createDocument(c *gin.Context) {
 		return
 	}
 
-	params := store.InsertParams[Document]{
+	doc, err := s.db.Insert(&store.InsertParams[Document]{
 		Document: body,
 		Language: tokenizer.Language(strings.ToLower(c.Query("lang"))),
-	}
+	})
 
-	doc, err := s.db.Insert(&params)
-	if err != nil {
-		c.Status(http.StatusInternalServerError)
-		return
+	switch err.(type) {
+	case nil:
+		c.JSON(http.StatusCreated, DocumentResponse{
+			Id:       doc.Id,
+			Title:    doc.Data.Title,
+			Url:      doc.Data.Url,
+			Abstract: doc.Data.Abstract,
+		})
+	default:
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Message: err.Error(),
+		})
 	}
-
-	c.JSON(http.StatusCreated, documentFromRecord(doc))
 }
 
 func (s *Server) updateDocument(c *gin.Context) {
@@ -105,40 +131,56 @@ func (s *Server) updateDocument(c *gin.Context) {
 		return
 	}
 
-	params := store.UpdateParams[Document]{
+	doc, err := s.db.Update(&store.UpdateParams[Document]{
 		Id:       c.Param("id"),
 		Document: body,
 		Language: tokenizer.Language(strings.ToLower(c.Query("lang"))),
-	}
+	})
 
-	doc, err := s.db.Update(&params)
-	if err != nil {
-		c.Status(http.StatusNotFound)
-		return
+	switch err.(type) {
+	case nil:
+		c.JSON(http.StatusOK, DocumentResponse{
+			Id:       doc.Id,
+			Title:    doc.Data.Title,
+			Url:      doc.Data.Url,
+			Abstract: doc.Data.Abstract,
+		})
+	case *store.DocumentNotFoundError:
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Message: err.Error(),
+		})
+	default:
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Message: err.Error(),
+		})
 	}
-
-	c.JSON(http.StatusOK, documentFromRecord(doc))
 }
 
 func (s *Server) deleteDocument(c *gin.Context) {
-	params := store.DeleteParams[Document]{
+	err := s.db.Delete(&store.DeleteParams[Document]{
 		Id:       c.Param("id"),
 		Language: tokenizer.Language(strings.ToLower(c.Query("lang"))),
-	}
+	})
 
-	if err := s.db.Delete(&params); err != nil {
-		c.Status(http.StatusNotFound)
-		return
+	switch err.(type) {
+	case nil:
+		c.Status(http.StatusOK)
+	case *store.DocumentNotFoundError:
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Message: err.Error(),
+		})
+	default:
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Message: err.Error(),
+		})
 	}
-
-	c.Status(http.StatusOK)
 }
 
 func (s *Server) searchDocuments(c *gin.Context) {
-	params := store.SearchParams{
+	params := SearchRequest{
 		Properties: []string{},
 		Limit:      10,
-		Relevance: store.BM25Params{
+		Relevance: BM25Params{
 			K: 1.2,
 			B: 0.75,
 			D: 0.5,
@@ -149,27 +191,28 @@ func (s *Server) searchDocuments(c *gin.Context) {
 	}
 
 	start := time.Now()
-	result, err := s.db.Search(&params)
+	result, err := s.db.Search(&store.SearchParams{
+		Query:      params.Query,
+		Properties: params.Properties,
+		Exact:      params.Exact,
+		Tolerance:  params.Tolerance,
+		Relevance:  store.BM25Params(params.Relevance),
+		Offset:     params.Offset,
+		Limit:      params.Limit,
+	})
 	elapsed := time.Since(start)
 
-	if err != nil {
-		c.Status(http.StatusBadRequest)
-		return
-	}
-
-	c.JSON(http.StatusOK, SearchDocumentResponse{
-		Count:   result.Count,
-		Hits:    *(*[]SearchDocument)(unsafe.Pointer(&result.Hits)),
-		Elapsed: elapsed.Microseconds(),
-	})
-}
-
-func documentFromRecord(d store.Record[Document]) DocumentResponse {
-	return DocumentResponse{
-		Id:       d.Id,
-		Title:    d.Data.Title,
-		Url:      d.Data.Url,
-		Abstract: d.Data.Abstract,
+	switch err.(type) {
+	case nil:
+		c.JSON(http.StatusOK, SearchDocumentResponse{
+			Count:   result.Count,
+			Hits:    *(*[]SearchDocument)(unsafe.Pointer(&result.Hits)),
+			Elapsed: elapsed.Microseconds(),
+		})
+	default:
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Message: err.Error(),
+		})
 	}
 }
 

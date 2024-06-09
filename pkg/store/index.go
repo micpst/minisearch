@@ -121,7 +121,7 @@ func (idx *index[K, S]) delete(params *indexParams[K, S]) {
 	}
 }
 
-func (idx *index[K, S]) find(params *findParams) map[K]float64 {
+func (idx *index[K, S]) find(params *findParams) (map[K]float64, error) {
 	idScores := make(map[K]float64)
 
 	if index, ok := idx.indexes[params.property]; ok {
@@ -142,9 +142,11 @@ func (idx *index[K, S]) find(params *findParams) map[K]float64 {
 				params.relevance.D,
 			)
 		}
+	} else {
+		return nil, &WrongSearchPropertyType{Property: params.property}
 	}
 
-	return idScores
+	return idScores, nil
 }
 
 func flattenSchema(obj any, prefix ...string) map[string]any {
